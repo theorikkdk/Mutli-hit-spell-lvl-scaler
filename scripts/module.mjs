@@ -1,3 +1,12 @@
+import {
+  clearExpiredCastContexts,
+  deleteCastContext,
+  listCastContexts,
+  getCastContext,
+  createCastContext
+} from "./runtime/cast-context.mjs";
+import { computeExtraHitCount } from "./workflows/extra-hit-count.mjs";
+
 export const MODULE_ID = "multi-hit-spell-lvl-scaler";
 export const MODULE_TITLE = "Multi-Hit Spell Level Scaler";
 export const LOCALIZATION_ROOT = "MULTI_HIT_SPELL_LVL_SCALER";
@@ -207,7 +216,15 @@ export function createApi() {
     defaults: Object.freeze({
       spellConfig: createSpellConfig()
     }),
+    runtime: Object.freeze({
+      createCastContext,
+      getCastContext,
+      deleteCastContext,
+      listCastContexts,
+      clearExpiredCastContexts
+    }),
     createSpellConfig,
+    computeExtraHitCount,
     normalizeSpellConfig,
     getSpellConfig,
     isSpellConfigEnabled,

@@ -6,6 +6,7 @@ import {
   registerModuleApi,
   registerSettings
 } from "./module.mjs";
+import { registerCastDetector } from "./workflows/cast-detector.mjs";
 
 Hooks.once("init", () => {
   registerSettings();
@@ -18,6 +19,7 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("setup", () => {
+  registerCastDetector();
   log("setup");
 });
 
