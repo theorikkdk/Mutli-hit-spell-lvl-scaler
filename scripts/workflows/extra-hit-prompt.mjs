@@ -7,6 +7,7 @@ import {
 
 const MODULE_ID = "multi-hit-spell-lvl-scaler";
 const OPEN_PROMPTS = new Map();
+const DialogV2 = foundry?.applications?.api?.DialogV2 ?? null;
 
 function closePrompt(contextId) {
   const existingPrompt = OPEN_PROMPTS.get(contextId);
@@ -69,39 +70,44 @@ export function promptExtraHitResolution(contextId) {
 
   closePrompt(contextId);
 
-  const buttons = {
-    next: {
+  const buttons = [
+    {
+      action: "next",
       label: "Next Hit",
       callback: async () => handleNext(contextId)
     },
-    cancel: {
+    {
+      action: "cancel",
       label: "Cancel",
       callback: async () => handleCancel(contextId)
     }
-  };
+  ];
 
   if (context.targetingMode === "focus") {
-    buttons.resolveAll = {
+    buttons.splice(1, 0, {
+      action: "resolveAll",
       label: "Resolve All",
       callback: async () => handleResolveAll(contextId)
-    };
+    });
   }
 
-  const prompt = new Dialog({
-    title: `Extra Hits: ${context.item?.name ?? context.id}`,
+  const prompt = new DialogV2({
+    window: {
+      title: `Extra Hits: ${context.item?.name ?? context.id}`
+    },
     content: buildPromptContent(context),
     buttons,
-    default: "next",
+    position: {
+      width: 360
+    },
+    modal: false,
     close: () => {
       OPEN_PROMPTS.delete(contextId);
     }
-  }, {
-    width: 360,
-    classes: [MODULE_ID, "extra-hit-prompt"]
   });
 
   OPEN_PROMPTS.set(contextId, prompt);
-  prompt.render(true);
+  prompt.render({ force: true });
 
   return prompt;
 }

@@ -272,14 +272,14 @@ function shouldHandleActivity(item, activity, spellConfig) {
 }
 
 function resolveUserId(results) {
-  const messageUser = results?.message?.user;
+  const messageAuthor = results?.message?.author;
 
-  if (typeof messageUser === "string" && messageUser) {
-    return messageUser;
+  if (typeof messageAuthor === "string" && messageAuthor) {
+    return messageAuthor;
   }
 
-  if (typeof messageUser?.id === "string" && messageUser.id) {
-    return messageUser.id;
+  if (typeof messageAuthor?.id === "string" && messageAuthor.id) {
+    return messageAuthor.id;
   }
 
   if (typeof game?.user?.id === "string" && game.user.id) {
