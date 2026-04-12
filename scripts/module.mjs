@@ -6,6 +6,11 @@ import {
   createCastContext
 } from "./runtime/cast-context.mjs";
 import { computeExtraHitCount } from "./workflows/extra-hit-count.mjs";
+import {
+  cancelCastContext,
+  resolveNextExtraHit,
+  resolveRemainingExtraHits
+} from "./workflows/extra-hit-executor.mjs";
 
 export const MODULE_ID = "multi-hit-spell-lvl-scaler";
 export const MODULE_TITLE = "Multi-Hit Spell Level Scaler";
@@ -225,6 +230,9 @@ export function createApi() {
     }),
     createSpellConfig,
     computeExtraHitCount,
+    resolveNextExtraHit,
+    resolveRemainingExtraHits,
+    cancelCastContext,
     normalizeSpellConfig,
     getSpellConfig,
     isSpellConfigEnabled,

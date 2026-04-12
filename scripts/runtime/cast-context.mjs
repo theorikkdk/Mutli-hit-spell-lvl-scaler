@@ -29,6 +29,23 @@ function createContextId() {
     ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function mergeData(target, source) {
+  if (foundry?.utils?.mergeObject) {
+    return foundry.utils.mergeObject(target, source, {
+      inplace: false,
+      insertKeys: true,
+      insertValues: true,
+      overwrite: true,
+      recursive: true
+    });
+  }
+
+  return {
+    ...target,
+    ...source
+  };
+}
+
 function summarizeDocument(document, fallbackType = "document") {
   if (!document) {
     return null;
@@ -79,6 +96,7 @@ export function createCastContext({
   actor = null,
   item = null,
   token = null,
+  initialTargets = [],
   spellConfig = {},
   usageConfig = {},
   spellLevel = null,
@@ -129,6 +147,7 @@ export function createCastContext({
     targetingMode: typeof spellConfig?.targetingMode === "string" ? spellConfig.targetingMode : null,
     resolutionMode: typeof spellConfig?.resolutionMode === "string" ? spellConfig.resolutionMode : null,
     userId: resolvedUserId,
+    initialTargets: cloneData(Array.isArray(initialTargets) ? initialTargets : []),
     lifecycle: {
       phase: "detected"
     },
@@ -161,6 +180,25 @@ export function createCastContext({
   ACTIVE_CAST_CONTEXTS.set(context.id, context);
 
   return cloneData(context);
+}
+
+export function updateCastContext(contextId, changes = {}) {
+  if (!contextId) {
+    return null;
+  }
+
+  clearExpiredCastContexts();
+
+  const existingContext = ACTIVE_CAST_CONTEXTS.get(contextId);
+
+  if (!existingContext) {
+    return null;
+  }
+
+  const nextContext = mergeData(cloneData(existingContext), cloneData(changes ?? {}));
+  ACTIVE_CAST_CONTEXTS.set(contextId, nextContext);
+
+  return cloneData(nextContext);
 }
 
 export function getCastContext(contextId) {

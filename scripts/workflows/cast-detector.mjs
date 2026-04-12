@@ -1,8 +1,10 @@
 import { debug, getSpellConfig, isSpellConfigEnabled } from "../module.mjs";
 import { createCastContext } from "../runtime/cast-context.mjs";
+import { promptExtraHitResolution } from "./extra-hit-prompt.mjs";
 import { computeExtraHitCount } from "./extra-hit-count.mjs";
 
 const CAST_DETECTOR_HOOK = "dnd5e.postUseActivity";
+const MODULE_ID = "multi-hit-spell-lvl-scaler";
 
 let castDetectorRegistered = false;
 
@@ -47,6 +49,28 @@ function summarizeToken(token) {
     sceneId: typeof tokenDocument.parent?.id === "string" ? tokenDocument.parent.id : null,
     sceneName: typeof tokenDocument.parent?.name === "string" ? tokenDocument.parent.name : ""
   };
+}
+
+function createTargetSnapshot(token) {
+  const tokenDocument = token?.document ?? token;
+
+  if (!tokenDocument?.uuid) {
+    return null;
+  }
+
+  return {
+    tokenId: typeof tokenDocument.id === "string" ? tokenDocument.id : null,
+    tokenUuid: tokenDocument.uuid,
+    actorUuid: typeof tokenDocument.actor?.uuid === "string" ? tokenDocument.actor.uuid : null,
+    sceneId: typeof tokenDocument.parent?.id === "string" ? tokenDocument.parent.id : null,
+    name: typeof tokenDocument.name === "string"
+      ? tokenDocument.name
+      : (typeof tokenDocument.actor?.name === "string" ? tokenDocument.actor.name : "")
+  };
+}
+
+function getInitialTargetSnapshots() {
+  return Array.from(game?.user?.targets ?? [], (token) => createTargetSnapshot(token)).filter(Boolean);
 }
 
 function resolveActor(activity, results) {
@@ -266,6 +290,14 @@ function resolveUserId(results) {
 }
 
 function onPostUseActivity(activity, usageConfig = {}, results = {}) {
+  if (usageConfig?.[MODULE_ID]?.isExtraHit) {
+    debug("Skipping cast detection because this activity use was triggered as an extra hit.", {
+      activity: summarizeDocument(activity, "activity"),
+      contextId: usageConfig?.[MODULE_ID]?.contextId ?? null
+    });
+    return;
+  }
+
   const actorResolution = resolveActor(activity, results);
   const item = resolveItem(activity, actorResolution.actor);
   const spellConfig = item ? getSpellConfig(item) : null;
@@ -310,6 +342,7 @@ function onPostUseActivity(activity, usageConfig = {}, results = {}) {
     actor: actorResolution.actor,
     item,
     token: tokenResolution.token,
+    initialTargets: getInitialTargetSnapshots(),
     spellConfig,
     usageConfig,
     spellLevel: spellLevel.value,
@@ -341,6 +374,10 @@ function onPostUseActivity(activity, usageConfig = {}, results = {}) {
     },
     castContext
   });
+
+  if ((castContext.resolutionMode === "manual") && (!castContext.userId || (castContext.userId === game?.user?.id))) {
+    promptExtraHitResolution(castContext.id);
+  }
 }
 
 // Observe finalized activity usage rather than altering dnd5e execution before we need to.
