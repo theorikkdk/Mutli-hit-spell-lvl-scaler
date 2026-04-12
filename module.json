@@ -1,0 +1,40 @@
+{
+  "id": "multi-hit-spell-lvl-scaler",
+  "title": "Multi-Hit Spell Level Scaler",
+  "description": "Standalone Foundry VTT V13 module for dnd5e that scales selected spells by adding extra hits instead of increasing per-hit damage.",
+  "version": "0.1.0",
+  "authors": [
+    {
+      "name": "theorikkdk",
+      "email": "theorik.kdk@gmail.com"
+    }
+  ],
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "dnd5e",
+        "type": "system"
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/main.mjs"
+  ],
+  "languages": [
+    {
+      "lang": "fr",
+      "name": "Francais",
+      "path": "lang/fr.json"
+    },
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "readme": "README.md"
+}

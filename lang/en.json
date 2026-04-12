@@ -1,0 +1,40 @@
+{
+  "MULTI_HIT_SPELL_LVL_SCALER": {
+    "ModuleTitle": "Multi-Hit Spell Level Scaler",
+    "Settings": {
+      "Debug": {
+        "Name": "Enable debug logs",
+        "Hint": "Write additional Multi-Hit Spell Level Scaler diagnostics to the browser console."
+      }
+    },
+    "Schema": {
+      "Enabled": "Enabled",
+      "BaseActivityId": "Base activity id",
+      "ExtraActivityId": "Extra activity id",
+      "CountMode": "Count mode",
+      "FixedCount": "Fixed extra hit count",
+      "PromptLabel": "Prompt label",
+      "TargetingMode": "Targeting mode",
+      "ResolutionMode": "Resolution mode",
+      "SlotScaling": {
+        "BaseLevel": "Base spell level",
+        "PerLevel": "Extra hits per slot level",
+        "CountOnly": "Count only"
+      }
+    },
+    "Options": {
+      "CountModes": {
+        "Fixed": "Fixed",
+        "SlotScaling": "Slot scaling"
+      },
+      "TargetingModes": {
+        "Retarget": "Retarget between hits",
+        "Focus": "Focus one target"
+      },
+      "ResolutionModes": {
+        "Manual": "Manual step-by-step",
+        "Auto": "Automatic"
+      }
+    }
+  }
+}

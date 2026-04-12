@@ -1,0 +1,40 @@
+{
+  "MULTI_HIT_SPELL_LVL_SCALER": {
+    "ModuleTitle": "Multi-Hit Spell Level Scaler",
+    "Settings": {
+      "Debug": {
+        "Name": "Activer les logs de debug",
+        "Hint": "Ecrit des diagnostics supplementaires du module dans la console du navigateur."
+      }
+    },
+    "Schema": {
+      "Enabled": "Active",
+      "BaseActivityId": "Id de l'activite de base",
+      "ExtraActivityId": "Id de l'activite supplementaire",
+      "CountMode": "Mode de comptage",
+      "FixedCount": "Nombre fixe de hits supplementaires",
+      "PromptLabel": "Libelle du prompt",
+      "TargetingMode": "Mode de ciblage",
+      "ResolutionMode": "Mode de resolution",
+      "SlotScaling": {
+        "BaseLevel": "Niveau de sort de base",
+        "PerLevel": "Hits supplementaires par niveau d'emplacement",
+        "CountOnly": "Compter uniquement"
+      }
+    },
+    "Options": {
+      "CountModes": {
+        "Fixed": "Fixe",
+        "SlotScaling": "Scaling par emplacement"
+      },
+      "TargetingModes": {
+        "Retarget": "Changer de cible entre les hits",
+        "Focus": "Tout sur la meme cible"
+      },
+      "ResolutionModes": {
+        "Manual": "Manuel pas a pas",
+        "Auto": "Automatique"
+      }
+    }
+  }
+}
