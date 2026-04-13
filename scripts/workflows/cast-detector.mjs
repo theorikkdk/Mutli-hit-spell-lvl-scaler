@@ -1,8 +1,10 @@
-import { debug, getSpellConfig, isSpellConfigEnabled } from "../module.mjs";
-import { createCastContext } from "../runtime/cast-context.mjs";
+import { debug, getSpellConfig, warn } from "../module.mjs";
+import { createCastContext, getCastContext } from "../runtime/cast-context.mjs";
 import { promptExtraHitResolution } from "./extra-hit-prompt.mjs";
 import { computeExtraHitCount } from "./extra-hit-count.mjs";
+import { resolveNextExtraHit } from "./extra-hit-executor.mjs";
 
+const PRE_CAST_GUARD_HOOK = "dnd5e.preUseActivity";
 const CAST_DETECTOR_HOOK = "dnd5e.postUseActivity";
 const MODULE_ID = "multi-hit-spell-lvl-scaler";
 
@@ -20,6 +22,14 @@ function normalizeNonNegativeInteger(value, fallback = null) {
   }
 
   return Math.max(0, Math.trunc(numericValue));
+}
+
+function cloneData(data) {
+  if (typeof globalThis.structuredClone === "function") {
+    return globalThis.structuredClone(data);
+  }
+
+  return JSON.parse(JSON.stringify(data));
 }
 
 function summarizeDocument(document, fallbackType = "document") {
@@ -51,6 +61,19 @@ function summarizeToken(token) {
   };
 }
 
+function clonePlainObject(data) {
+  if (foundry?.utils?.deepClone) {
+    return foundry.utils.deepClone(data ?? {});
+  }
+
+  return cloneData(data ?? {});
+}
+
+function notifyWarn(message, details = undefined) {
+  warn(message, details);
+  ui.notifications?.warn?.(message);
+}
+
 function createTargetSnapshot(token) {
   const tokenDocument = token?.document ?? token;
 
@@ -69,76 +92,106 @@ function createTargetSnapshot(token) {
   };
 }
 
-function getInitialTargetSnapshots() {
+function getCurrentUserTargetSnapshots() {
   return Array.from(game?.user?.targets ?? [], (token) => createTargetSnapshot(token)).filter(Boolean);
 }
 
-function resolveActor(activity, results) {
-  const speaker = results?.message?.speaker ?? null;
-
-  if (speaker?.actor) {
-    const actorFromSpeaker = game.actors?.get?.(speaker.actor) ?? null;
-
-    if (actorFromSpeaker) {
-      return {
-        actor: actorFromSpeaker,
-        source: "message.speaker.actor"
-      };
-    }
+function resolveTokenObjectFromSnapshot(snapshot) {
+  if (!snapshot?.tokenId) {
+    return null;
   }
 
-  if (speaker?.scene && speaker?.token) {
-    const tokenDocument = game.scenes?.get?.(speaker.scene)?.tokens?.get?.(speaker.token) ?? null;
+  return canvas?.tokens?.get?.(snapshot.tokenId)
+    ?? game.scenes?.get?.(snapshot.sceneId ?? null)?.tokens?.get?.(snapshot.tokenId)?.object
+    ?? null;
+}
 
-    if (tokenDocument?.actor) {
-      return {
-        actor: tokenDocument.actor,
-        source: "message.speaker.token.actor"
-      };
-    }
-  }
+async function applyUserTargetSnapshots(targetSnapshots = []) {
+  const snapshots = Array.isArray(targetSnapshots) ? targetSnapshots : [];
 
-  if (activity?.actor) {
+  if (typeof game?.user?.updateTokenTargets === "function") {
+    await game.user.updateTokenTargets(snapshots.map((snapshot) => snapshot.tokenId).filter(Boolean));
     return {
-      actor: activity.actor,
-      source: "activity.actor"
+      ok: true,
+      source: "game.user.updateTokenTargets"
     };
   }
 
-  if (activity?.item?.actor) {
-    return {
-      actor: activity.item.actor,
-      source: "activity.item.actor"
-    };
+  const currentTargets = Array.from(game?.user?.targets ?? []);
+
+  for (const token of currentTargets) {
+    if (typeof token?.setTarget === "function") {
+      token.setTarget(false, {
+        user: game.user,
+        releaseOthers: false,
+        groupSelection: true
+      });
+    }
+  }
+
+  for (const [index, snapshot] of snapshots.entries()) {
+    const tokenObject = resolveTokenObjectFromSnapshot(snapshot);
+
+    if (typeof tokenObject?.setTarget !== "function") {
+      return {
+        ok: false,
+        reason: "selected-target-unresolved",
+        details: {
+          targetSnapshot: snapshot
+        }
+      };
+    }
+
+    tokenObject.setTarget(true, {
+      user: game.user,
+      releaseOthers: index === 0,
+      groupSelection: true
+    });
   }
 
   return {
-    actor: null,
-    source: "unresolved"
+    ok: true,
+    source: "token.setTarget"
   };
 }
 
-function resolveToken(activity, actor, results) {
-  const speaker = results?.message?.speaker ?? null;
-
-  if (speaker?.scene && speaker?.token) {
-    const tokenDocument = game.scenes?.get?.(speaker.scene)?.tokens?.get?.(speaker.token) ?? null;
-
-    if (tokenDocument?.object) {
-      return {
-        token: tokenDocument.object,
-        source: "message.speaker.token.object"
-      };
-    }
-
-    if (tokenDocument) {
-      return {
-        token: tokenDocument,
-        source: "message.speaker.token.document"
-      };
-    }
+function createTargetDescriptorFromSnapshot(snapshot) {
+  if (!snapshot?.actorUuid) {
+    return null;
   }
 
+  const tokenObject = resolveTokenObjectFromSnapshot(snapshot);
+  const actor = tokenObject?.actor ?? tokenObject?.document?.actor ?? null;
+
+  return {
+    name: snapshot.name ?? actor?.name ?? "",
+    img: actor?.img ?? actor?.prototypeToken?.texture?.src ?? "",
+    uuid: snapshot.actorUuid,
+    ac: actor?.statuses?.has?.("coverTotal") ? null : (actor?.system?.attributes?.ac?.value ?? null)
+  };
+}
+
+function setUsageMessageTargets(messageConfig, targetSnapshots = []) {
+  const descriptors = targetSnapshots
+    .map((snapshot) => createTargetDescriptorFromSnapshot(snapshot))
+    .filter(Boolean);
+
+  foundry.utils.setProperty(messageConfig, "data.flags.dnd5e.targets", descriptors);
+}
+
+function resolveItem(activity, actor) {
+  return actor?.items?.get?.(activity?.item?.id)
+    ?? activity?.item
+    ?? null;
+}
+
+function resolveActivity(activity, item) {
+  return item?.system?.activities?.get?.(activity?.id)
+    ?? activity
+    ?? null;
+}
+
+function resolveToken(activity, actor) {
   const activeToken = actor?.getActiveTokens?.()?.[0] ?? null;
 
   if (activeToken) {
@@ -168,32 +221,7 @@ function resolveToken(activity, actor, results) {
   };
 }
 
-function resolveItem(activity, actor) {
-  return actor?.items?.get?.(activity?.item?.id)
-    ?? activity?.item
-    ?? null;
-}
-
-function resolveActivity(activity, item) {
-  return item?.system?.activities?.get?.(activity?.id)
-    ?? activity
-    ?? null;
-}
-
-function resolveSpellLevel(activity, item, actor, usageConfig, results) {
-  const messageSpellLevel = normalizeNonNegativeInteger(
-    results?.message?.flags?.dnd5e?.use?.spellLevel
-      ?? results?.message?.data?.flags?.dnd5e?.use?.spellLevel,
-    null
-  );
-
-  if (messageSpellLevel !== null) {
-    return {
-      value: messageSpellLevel,
-      source: "message.flags.dnd5e.use.spellLevel"
-    };
-  }
-
+function resolveSpellLevel(activity, item, actor, usageConfig = {}) {
   const spellSlot = usageConfig?.spell?.slot;
 
   if (typeof spellSlot === "number") {
@@ -289,108 +317,293 @@ function resolveUserId(results) {
   return null;
 }
 
-function onPostUseActivity(activity, usageConfig = {}, results = {}) {
-  if (usageConfig?.[MODULE_ID]?.isExtraHit) {
-    debug("Skipping cast detection because this activity use was triggered as an extra hit.", {
-      activity: summarizeDocument(activity, "activity"),
-      contextId: usageConfig?.[MODULE_ID]?.contextId ?? null
-    });
-    return;
+function buildControlledBaseUsageConfig(sourceUsageConfig = {}) {
+  const usageConfig = {
+    ...sourceUsageConfig,
+    spell: clonePlainObject(sourceUsageConfig?.spell ?? {}),
+    concentration: clonePlainObject(sourceUsageConfig?.concentration ?? {}),
+    subsequentActions: false,
+    [MODULE_ID]: {
+      ...clonePlainObject(sourceUsageConfig?.[MODULE_ID] ?? {}),
+      isControlledInitialBase: true,
+      skipCastDetection: true
+    }
+  };
+
+  if (foundry.utils.getType(sourceUsageConfig?.consume) === "Object") {
+    usageConfig.consume = clonePlainObject(sourceUsageConfig.consume);
   }
 
-  const actorResolution = resolveActor(activity, results);
-  const item = resolveItem(activity, actorResolution.actor);
+  delete usageConfig.targets;
+  delete usageConfig.targetIds;
+  delete usageConfig.targetUuids;
+
+  return usageConfig;
+}
+
+function buildControlledBaseDialogConfig(sourceDialogConfig = {}) {
+  return {
+    ...sourceDialogConfig,
+    configure: false,
+    options: clonePlainObject(sourceDialogConfig?.options ?? {})
+  };
+}
+
+function buildControlledBaseMessageConfig(targetSnapshot, sourceMessageConfig = {}, metadata = {}) {
+  const messageConfig = {
+    create: sourceMessageConfig?.create ?? true,
+    data: clonePlainObject(sourceMessageConfig?.data ?? {})
+  };
+
+  setUsageMessageTargets(messageConfig, [targetSnapshot]);
+  foundry.utils.setProperty(messageConfig, `data.flags.${MODULE_ID}.initialAllocation`, {
+    ...metadata,
+    target: cloneData(targetSnapshot)
+  });
+
+  return messageConfig;
+}
+
+async function resolveConfiguredInitialCast(activity, usageConfig = {}, dialogConfig = {}, messageConfig = {}) {
+  const actor = activity?.actor ?? activity?.item?.actor ?? null;
+  const item = resolveItem(activity, actor);
   const spellConfig = item ? getSpellConfig(item) : null;
+  const controlledActivity = resolveActivity(activity, item);
 
-  if (!isSpellConfigEnabled(item)) {
+  if (!shouldHandleActivity(item, controlledActivity, spellConfig)) {
     return;
   }
 
-  if (spellConfig?.baseActivityId && (activity?.id !== spellConfig.baseActivityId)) {
-    debug("Skipping configured spell cast because the used activity does not match baseActivityId.", {
-      item: summarizeDocument(item, "item"),
-      activity: summarizeDocument(activity, "activity"),
-      configuredBaseActivityId: spellConfig.baseActivityId
+  const originalTargetSnapshots = getCurrentUserTargetSnapshots().map((snapshot) => cloneData(snapshot));
+  const manualUsageConfig = buildControlledBaseUsageConfig(usageConfig);
+  const manualDialogConfig = buildControlledBaseDialogConfig(dialogConfig);
+
+  try {
+    const requiresConfigurationDialog = dialogConfig?.configure
+      && (typeof controlledActivity?._requiresConfigurationDialog === "function")
+      && controlledActivity._requiresConfigurationDialog(manualUsageConfig);
+
+    if (requiresConfigurationDialog) {
+      try {
+        await dialogConfig.applicationClass.create(
+          controlledActivity,
+          manualUsageConfig,
+          manualDialogConfig.options
+        );
+      } catch {
+        return;
+      }
+    }
+
+    const initialTargetSnapshots = getCurrentUserTargetSnapshots().map((snapshot) => cloneData(snapshot));
+    const initialTargetCount = initialTargetSnapshots.length;
+    const spellLevel = resolveSpellLevel(controlledActivity, item, actor, manualUsageConfig);
+    const hitSummary = computeExtraHitCount({
+      item,
+      spellConfig,
+      castLevel: spellLevel.value
     });
-    return;
-  }
+    const totalHits = Math.max(1, normalizeNonNegativeInteger(hitSummary?.totalHits, 1) ?? 1);
 
-  if (!shouldHandleActivity(item, activity, spellConfig)) {
-    return;
-  }
+    if (initialTargetCount < 1) {
+      notifyWarn(`Select between 1 and ${totalHits} target(s) before casting this configured spell.`);
 
-  const resolvedActivity = resolveActivity(activity, item);
-  const tokenResolution = resolveToken(resolvedActivity, actorResolution.actor, results);
-  const spellLevel = resolveSpellLevel(resolvedActivity, item, actorResolution.actor, usageConfig, results);
-  const extraHitSummary = computeExtraHitCount({
-    item,
-    spellConfig,
-    castLevel: spellLevel.value
-  });
+      debug("Blocked configured spell cast because no target was selected.", {
+        hook: PRE_CAST_GUARD_HOOK,
+        item: summarizeDocument(item, "item"),
+        activity: summarizeDocument(controlledActivity, "activity"),
+        spellLevel,
+        hitSummary,
+        totalHits
+      });
 
-  if (extraHitSummary.extraHits <= 0) {
-    debug("Skipping configured spell cast because it produces no extra hits.", {
-      item: summarizeDocument(item, "item"),
-      activity: summarizeDocument(resolvedActivity, "activity"),
-      extraHitSummary
+      return;
+    }
+
+    if (initialTargetCount > totalHits) {
+      notifyWarn(`You selected ${initialTargetCount} targets but this cast only provides ${totalHits} hit(s). Reduce your selection and try again.`);
+
+      debug("Blocked configured spell cast because selected targets exceed the total hits available.", {
+        hook: PRE_CAST_GUARD_HOOK,
+        item: summarizeDocument(item, "item"),
+        activity: summarizeDocument(controlledActivity, "activity"),
+        spellLevel,
+        hitSummary,
+        initialTargetCount,
+        totalHits
+      });
+
+      return;
+    }
+
+    const firstTargetSnapshot = initialTargetSnapshots[0];
+    const firstSelectionResult = await applyUserTargetSnapshots([firstTargetSnapshot]);
+
+    if (!firstSelectionResult.ok) {
+      notifyWarn("The initial target could not be prepared for a single controlled cast.");
+
+      debug("Blocked controlled initial cast because the first target could not be selected cleanly.", {
+        hook: PRE_CAST_GUARD_HOOK,
+        activity: summarizeDocument(controlledActivity, "activity"),
+        firstTargetSnapshot,
+        firstSelectionResult
+      });
+
+      return;
+    }
+
+    const baseResults = await controlledActivity.use(
+      manualUsageConfig,
+      manualDialogConfig,
+      buildControlledBaseMessageConfig(firstTargetSnapshot, messageConfig, {
+        totalHits,
+        initialTargetCount,
+        hitIndex: 1
+      })
+    );
+
+    if (!baseResults) {
+      debug("Controlled initial cast did not complete and no hit context was created.", {
+        hook: PRE_CAST_GUARD_HOOK,
+        item: summarizeDocument(item, "item"),
+        activity: summarizeDocument(controlledActivity, "activity"),
+        initialTargetCount,
+        totalHits
+      });
+
+      return;
+    }
+
+    const tokenResolution = resolveToken(controlledActivity, actor);
+    let castContext = createCastContext({
+      activity: controlledActivity,
+      actor,
+      item,
+      token: tokenResolution.token,
+      spellConfig,
+      usageConfig: manualUsageConfig,
+      spellLevel: spellLevel.value,
+      extraHitSummary: hitSummary,
+      resolvedHitCount: 1,
+      results: baseResults,
+      userId: resolveUserId(baseResults),
+      createdFrom: PRE_CAST_GUARD_HOOK
     });
-    return;
-  }
 
-  const castContext = createCastContext({
-    activity: resolvedActivity,
-    actor: actorResolution.actor,
-    item,
-    token: tokenResolution.token,
-    initialTargets: getInitialTargetSnapshots(),
-    spellConfig,
-    usageConfig,
-    spellLevel: spellLevel.value,
-    extraHitSummary,
-    results,
-    userId: resolveUserId(results),
-    createdFrom: CAST_DETECTOR_HOOK
-  });
+    debug("Resolved first hit from the configured total-hit pool.", {
+      hook: PRE_CAST_GUARD_HOOK,
+      contextId: castContext?.id ?? null,
+      item: summarizeDocument(item, "item"),
+      activity: summarizeDocument(controlledActivity, "activity"),
+      actor: summarizeDocument(actor, "actor"),
+      token: summarizeToken(tokenResolution.token),
+      tokenSource: tokenResolution.source,
+      spellLevel,
+      totalHits,
+      initialTargetCount,
+      hitsRemaining: castContext?.hitsRemaining ?? 0
+    });
 
-  if (!castContext) {
-    return;
-  }
+    for (const targetSnapshot of initialTargetSnapshots.slice(1)) {
+      if (!castContext?.id) {
+        break;
+      }
 
-  debug("Detected configured spell cast.", {
-    hook: CAST_DETECTOR_HOOK,
-    contextId: castContext.id,
-    item: summarizeDocument(item, "item"),
-    activity: summarizeDocument(resolvedActivity, "activity"),
-    actor: summarizeDocument(actorResolution.actor, "actor"),
-    actorSource: actorResolution.source,
-    token: summarizeToken(tokenResolution.token),
-    tokenSource: tokenResolution.source,
-    spellLevel,
-    extraHits: extraHitSummary,
-    spellConfig,
-    message: {
-      id: typeof results?.message?.id === "string" ? results.message.id : null,
-      uuid: typeof results?.message?.uuid === "string" ? results.message.uuid : null
-    },
-    castContext
-  });
+      const nextHitResult = await resolveNextExtraHit(castContext.id, {
+        targetSnapshot,
+        restoreTargetSnapshots: [cloneData(targetSnapshot)],
+        event: manualUsageConfig.event
+      });
 
-  if ((castContext.resolutionMode === "manual") && (!castContext.userId || (castContext.userId === game?.user?.id))) {
-    promptExtraHitResolution(castContext.id);
+      if (!nextHitResult.ok) {
+        debug("Stopped controlled initial hit allocation before all selected targets were resolved.", {
+          hook: PRE_CAST_GUARD_HOOK,
+          contextId: castContext.id,
+          targetSnapshot,
+          nextHitResult
+        });
+        break;
+      }
+
+      castContext = nextHitResult.context ?? getCastContext(castContext.id) ?? null;
+    }
+
+    const remainingContext = castContext?.id ? getCastContext(castContext.id) : null;
+
+    if (remainingContext?.resolutionMode === "manual"
+      && (!remainingContext.userId || (remainingContext.userId === game?.user?.id))) {
+      promptExtraHitResolution(remainingContext.id);
+    }
+  } finally {
+    const restoreResult = await applyUserTargetSnapshots(originalTargetSnapshots);
+
+    if (!restoreResult.ok) {
+      debug("Unable to restore the original target selection after controlled hit allocation.", {
+        hook: PRE_CAST_GUARD_HOOK,
+        item: summarizeDocument(item, "item"),
+        activity: summarizeDocument(controlledActivity, "activity"),
+        originalTargetSnapshots,
+        restoreResult
+      });
+    }
   }
 }
 
-// Observe finalized activity usage rather than altering dnd5e execution before we need to.
+function onPreUseActivity(activity, usageConfig = {}, dialogConfig = {}, messageConfig = {}) {
+  if (usageConfig?.[MODULE_ID]?.isExtraHit || usageConfig?.[MODULE_ID]?.isControlledInitialBase) {
+    return true;
+  }
+
+  const actor = activity?.actor ?? activity?.item?.actor ?? null;
+  const item = resolveItem(activity, actor);
+  const spellConfig = item ? getSpellConfig(item) : null;
+
+  if (!shouldHandleActivity(item, activity, spellConfig)) {
+    return true;
+  }
+
+  debug("Blocked native configured spell cast and delegated to controlled mono-target allocation.", {
+    hook: PRE_CAST_GUARD_HOOK,
+    item: summarizeDocument(item, "item"),
+    activity: summarizeDocument(activity, "activity"),
+    selectedTargetCount: getCurrentUserTargetSnapshots().length
+  });
+
+  setTimeout(() => {
+    void resolveConfiguredInitialCast(activity, usageConfig, dialogConfig, messageConfig);
+  }, 0);
+
+  return false;
+}
+
+function onPostUseActivity(activity, usageConfig = {}) {
+  if (!usageConfig?.[MODULE_ID]?.skipCastDetection
+    && !usageConfig?.[MODULE_ID]?.isExtraHit
+    && !usageConfig?.[MODULE_ID]?.isControlledInitialBase) {
+    return;
+  }
+
+  debug("Skipping passive cast detection for a module-controlled hit workflow.", {
+    hook: CAST_DETECTOR_HOOK,
+    activity: summarizeDocument(activity, "activity"),
+    contextId: usageConfig?.[MODULE_ID]?.contextId ?? null
+  });
+}
+
 export function registerCastDetector() {
   if (castDetectorRegistered) {
     return false;
   }
 
+  Hooks.on(PRE_CAST_GUARD_HOOK, onPreUseActivity);
   Hooks.on(CAST_DETECTOR_HOOK, onPostUseActivity);
   castDetectorRegistered = true;
 
-  debug("Registered cast detector hook.", {
-    hook: CAST_DETECTOR_HOOK
+  debug("Registered cast detector hooks.", {
+    hooks: [
+      PRE_CAST_GUARD_HOOK,
+      CAST_DETECTOR_HOOK
+    ]
   });
 
   return true;

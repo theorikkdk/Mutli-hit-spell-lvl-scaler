@@ -43,8 +43,36 @@ function resolveBaseLevel(item, spellConfig, castLevel) {
   };
 }
 
-// Counts are expressed as extra hits after the base activity has already resolved normally.
-// In slot-scaling mode, fixedCount acts as the baseline amount before per-slot increases are added.
+function buildHitSummary({
+  totalHits,
+  mode,
+  baseLevel,
+  castLevel,
+  fixedCount,
+  scalingLevels,
+  perLevel,
+  countOnly,
+  baseLevelSource = undefined
+} = {}) {
+  const normalizedTotalHits = Math.max(1, normalizeNonNegativeInteger(totalHits, 1) ?? 1);
+  const legacyExtraHits = Math.max(0, normalizedTotalHits - 1);
+
+  return {
+    totalHits: normalizedTotalHits,
+    extraHits: legacyExtraHits,
+    mode,
+    baseLevel,
+    castLevel,
+    fixedCount,
+    scalingLevels,
+    perLevel,
+    countOnly,
+    ...(baseLevelSource ? { baseLevelSource } : {})
+  };
+}
+
+// The canonical result is now a pool of total hits.
+// `extraHits` remains as a legacy alias so existing configs and console calls stay usable.
 export function computeExtraHitCount({
   item = null,
   spellConfig = null,
@@ -53,15 +81,10 @@ export function computeExtraHitCount({
   const config = normalizeSpellConfig(spellConfig ?? createSpellConfig());
   const normalizedCastLevel = normalizeNonNegativeInteger(castLevel, null);
   const fixedCount = normalizeNonNegativeInteger(config.fixedCount, 0);
-  const baseHits = 1;
 
   if (config.countMode === COUNT_MODES.FIXED) {
-    const extraHits = fixedCount;
-
-    return {
-      extraHits,
-      totalHits: baseHits + extraHits,
-      baseHits,
+    return buildHitSummary({
+      totalHits: 1 + fixedCount,
       mode: config.countMode,
       baseLevel: null,
       castLevel: normalizedCastLevel,
@@ -69,19 +92,17 @@ export function computeExtraHitCount({
       scalingLevels: 0,
       perLevel: 0,
       countOnly: Boolean(config.slotScaling?.countOnly)
-    };
+    });
   }
 
   const { value: baseLevel, source: baseLevelSource } = resolveBaseLevel(item, config, normalizedCastLevel);
   const effectiveCastLevel = normalizedCastLevel ?? normalizeNonNegativeInteger(item?.system?.level, 0);
   const perLevel = normalizeNonNegativeInteger(config.slotScaling?.perLevel, 0);
   const scalingLevels = Math.max(0, effectiveCastLevel - (baseLevel ?? effectiveCastLevel));
-  const extraHits = fixedCount + (scalingLevels * perLevel);
+  const configuredHitBonus = fixedCount + (scalingLevels * perLevel);
 
-  return {
-    extraHits,
-    totalHits: baseHits + extraHits,
-    baseHits,
+  return buildHitSummary({
+    totalHits: 1 + configuredHitBonus,
     mode: config.countMode,
     baseLevel,
     castLevel: effectiveCastLevel,
@@ -90,7 +111,7 @@ export function computeExtraHitCount({
     perLevel,
     fixedCount,
     countOnly: Boolean(config.slotScaling?.countOnly)
-  };
+  });
 }
 
 export const calculateExtraHitCount = computeExtraHitCount;

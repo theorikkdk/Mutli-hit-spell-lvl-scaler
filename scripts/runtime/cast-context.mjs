@@ -75,6 +75,35 @@ function summarizeToken(token) {
   };
 }
 
+function normalizeContextState(context = {}) {
+  const totalHits = Math.max(
+    1,
+    normalizeNonNegativeInteger(
+      context.totalHits ?? context.extraHitsTotal,
+      1
+    ) ?? 1
+  );
+  const hitsRemaining = Math.min(
+    totalHits,
+    Math.max(
+      0,
+      normalizeNonNegativeInteger(
+        context.hitsRemaining ?? context.extraHitsRemaining,
+        totalHits
+      ) ?? totalHits
+    )
+  );
+
+  return {
+    ...context,
+    totalHits,
+    hitsRemaining,
+    hitsResolved: Math.max(0, totalHits - hitsRemaining),
+    extraHitsTotal: totalHits,
+    extraHitsRemaining: hitsRemaining
+  };
+}
+
 export function clearExpiredCastContexts(now = Date.now()) {
   let removedCount = 0;
 
@@ -96,20 +125,25 @@ export function createCastContext({
   actor = null,
   item = null,
   token = null,
-  initialTargets = [],
   spellConfig = {},
   usageConfig = {},
   spellLevel = null,
   extraHitSummary = {},
+  resolvedHitCount = 1,
   results = {},
   userId = null,
   createdFrom = "runtime"
 } = {}) {
   clearExpiredCastContexts();
 
-  const extraHitsTotal = normalizeNonNegativeInteger(extraHitSummary?.extraHits, 0);
+  const totalHits = Math.max(1, normalizeNonNegativeInteger(extraHitSummary?.totalHits, 1) ?? 1);
+  const normalizedResolvedHitCount = Math.min(
+    totalHits,
+    Math.max(0, normalizeNonNegativeInteger(resolvedHitCount, 0) ?? 0)
+  );
+  const hitsRemaining = Math.max(0, totalHits - normalizedResolvedHitCount);
 
-  if (extraHitsTotal <= 0) {
+  if (hitsRemaining <= 0) {
     return null;
   }
 
@@ -125,7 +159,7 @@ export function createCastContext({
     : (typeof activity?.id === "string" ? activity.id : null);
   const extraActivityId = (typeof spellConfig?.extraActivityId === "string" && spellConfig.extraActivityId.trim())
     ? spellConfig.extraActivityId.trim()
-    : null;
+    : baseActivityId;
   const resolvedUserId = (typeof userId === "string" && userId)
     ? userId
     : (typeof game?.user?.id === "string" ? game.user.id : null);
@@ -142,12 +176,13 @@ export function createCastContext({
     baseActivityId,
     extraActivityId,
     castLevel,
-    extraHitsTotal,
-    extraHitsRemaining: extraHitsTotal,
-    targetingMode: typeof spellConfig?.targetingMode === "string" ? spellConfig.targetingMode : null,
+    totalHits,
+    hitsResolved: normalizedResolvedHitCount,
+    hitsRemaining,
+    extraHitsTotal: totalHits,
+    extraHitsRemaining: hitsRemaining,
     resolutionMode: typeof spellConfig?.resolutionMode === "string" ? spellConfig.resolutionMode : null,
     userId: resolvedUserId,
-    initialTargets: cloneData(Array.isArray(initialTargets) ? initialTargets : []),
     lifecycle: {
       phase: "detected"
     },
@@ -168,7 +203,13 @@ export function createCastContext({
       consume: usageConfig?.consume ?? null,
       concentration: usageConfig?.concentration ?? null
     }),
-    extraHits: cloneData(extraHitSummary ?? { extraHits: 0 }),
+    extraHits: cloneData({
+      ...(extraHitSummary ?? {}),
+      totalHits,
+      hitsResolved: normalizedResolvedHitCount,
+      hitsRemaining,
+      extraHits: Math.max(0, totalHits - 1)
+    }),
     results: {
       messageId: typeof results?.message?.id === "string" ? results.message.id : null,
       messageUuid: typeof results?.message?.uuid === "string" ? results.message.uuid : null,
@@ -177,9 +218,10 @@ export function createCastContext({
     }
   };
 
-  ACTIVE_CAST_CONTEXTS.set(context.id, context);
+  const normalizedContext = normalizeContextState(context);
+  ACTIVE_CAST_CONTEXTS.set(normalizedContext.id, normalizedContext);
 
-  return cloneData(context);
+  return cloneData(normalizedContext);
 }
 
 export function updateCastContext(contextId, changes = {}) {
@@ -195,7 +237,9 @@ export function updateCastContext(contextId, changes = {}) {
     return null;
   }
 
-  const nextContext = mergeData(cloneData(existingContext), cloneData(changes ?? {}));
+  const nextContext = normalizeContextState(
+    mergeData(cloneData(existingContext), cloneData(changes ?? {}))
+  );
   ACTIVE_CAST_CONTEXTS.set(contextId, nextContext);
 
   return cloneData(nextContext);

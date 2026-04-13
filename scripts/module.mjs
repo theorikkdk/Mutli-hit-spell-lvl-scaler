@@ -28,11 +28,6 @@ export const COUNT_MODES = Object.freeze({
   SLOT_SCALING: "slot-scaling"
 });
 
-export const TARGETING_MODES = Object.freeze({
-  RETARGET: "retarget",
-  FOCUS: "focus"
-});
-
 export const RESOLUTION_MODES = Object.freeze({
   MANUAL: "manual",
   AUTO: "auto"
@@ -50,7 +45,6 @@ export const DEFAULT_SPELL_CONFIG = Object.freeze({
     countOnly: true
   }),
   promptLabel: "",
-  targetingMode: TARGETING_MODES.RETARGET,
   resolutionMode: RESOLUTION_MODES.MANUAL
 });
 
@@ -170,7 +164,6 @@ export function normalizeSpellConfig(source = {}) {
       countOnly: normalizeBoolean(slotScaling.countOnly, defaults.slotScaling.countOnly)
     },
     promptLabel: normalizeString(source.promptLabel, defaults.promptLabel),
-    targetingMode: normalizeEnum(source.targetingMode, TARGETING_MODES, defaults.targetingMode),
     resolutionMode: normalizeEnum(source.resolutionMode, RESOLUTION_MODES, defaults.resolutionMode)
   };
 }
@@ -215,7 +208,6 @@ export function createApi() {
     }),
     enums: Object.freeze({
       countModes: COUNT_MODES,
-      targetingModes: TARGETING_MODES,
       resolutionModes: RESOLUTION_MODES
     }),
     defaults: Object.freeze({

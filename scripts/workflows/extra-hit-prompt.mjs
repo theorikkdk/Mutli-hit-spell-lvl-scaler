@@ -21,17 +21,17 @@ function closePrompt(contextId) {
 }
 
 function buildPromptContent(context) {
-  const modeHint = context.targetingMode === "focus"
-    ? "Focus : le prochain hit reutilisera la cible initiale."
-    : "Retarget : change la cible actuelle avant de cliquer sur le hit suivant.";
+  const totalHits = context.totalHits ?? context.extraHitsTotal ?? 0;
+  const hitsRemaining = context.hitsRemaining ?? context.extraHitsRemaining ?? 0;
 
   return `
     <div class="${MODULE_ID}-extra-hit-prompt">
       <p><strong>${context.item?.name ?? "Configured spell"}</strong></p>
-      <p>Hits supplementaires restants : <strong>${context.extraHitsRemaining}</strong> / ${context.extraHitsTotal}</p>
-      <p>Mode de ciblage : <strong>${context.targetingMode ?? "unknown"}</strong></p>
+      <p>Hits restants : <strong>${hitsRemaining}</strong> / ${totalHits}</p>
       <p>Mode de resolution : <strong>${context.resolutionMode ?? "unknown"}</strong></p>
-      <p>${modeHint}</p>
+      <p>Next Hit utilise la cible actuellement selectionnee.</p>
+      <p>Resolve All consomme 1 hit par cible selectionnee, ou tous les hits restants sur l'unique cible selectionnee.</p>
+      <p>La selection ne doit jamais depasser le nombre de hits disponibles.</p>
     </div>
   `;
 }
@@ -77,23 +77,20 @@ export function promptExtraHitResolution(contextId) {
       callback: async () => handleNext(contextId)
     },
     {
+      action: "resolveAll",
+      label: "Resolve All",
+      callback: async () => handleResolveAll(contextId)
+    },
+    {
       action: "cancel",
       label: "Cancel",
       callback: async () => handleCancel(contextId)
     }
   ];
 
-  if (context.targetingMode === "focus") {
-    buttons.splice(1, 0, {
-      action: "resolveAll",
-      label: "Resolve All",
-      callback: async () => handleResolveAll(contextId)
-    });
-  }
-
   const prompt = new DialogV2({
     window: {
-      title: `Extra Hits: ${context.item?.name ?? context.id}`
+      title: `Hits: ${context.item?.name ?? context.id}`
     },
     content: buildPromptContent(context),
     buttons,

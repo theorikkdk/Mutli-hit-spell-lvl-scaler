@@ -63,6 +63,29 @@ function cloneData(data) {
   return JSON.parse(JSON.stringify(data));
 }
 
+function getContextTotalHits(context) {
+  return Math.max(
+    1,
+    normalizeNonNegativeInteger(
+      context?.totalHits ?? context?.extraHitsTotal,
+      1
+    ) ?? 1
+  );
+}
+
+function getContextHitsRemaining(context) {
+  return Math.min(
+    getContextTotalHits(context),
+    Math.max(
+      0,
+      normalizeNonNegativeInteger(
+        context?.hitsRemaining ?? context?.extraHitsRemaining,
+        0
+      ) ?? 0
+    )
+  );
+}
+
 function summarizeToken(token) {
   const tokenDocument = token?.document ?? token;
 
@@ -130,6 +153,10 @@ function getCurrentUserTargetSnapshots() {
   return Array.from(game?.user?.targets ?? [], (token) => createTokenSnapshot(token)).filter(Boolean);
 }
 
+function getCurrentCanvasSceneId() {
+  return canvas?.scene?.id ?? null;
+}
+
 async function resolveTokenDocumentFromSnapshot(snapshot) {
   if (!snapshot) {
     return null;
@@ -148,6 +175,84 @@ async function resolveTokenDocumentFromSnapshot(snapshot) {
   }
 
   return null;
+}
+
+async function applyUserTargetSnapshots(targetSnapshots = []) {
+  const snapshots = Array.isArray(targetSnapshots) ? targetSnapshots : [];
+  const activeSceneId = getCurrentCanvasSceneId();
+
+  for (const snapshot of snapshots) {
+    if (!snapshot?.tokenId) {
+      return {
+        ok: false,
+        reason: "selected-target-unresolved",
+        message: "A selected target could not be resolved anymore.",
+        details: {
+          targetSnapshot: snapshot
+        }
+      };
+    }
+
+    if (activeSceneId && snapshot.sceneId && (snapshot.sceneId !== activeSceneId)) {
+      return {
+        ok: false,
+        reason: "selected-target-off-scene",
+        message: "The selected target is not on the active scene anymore.",
+        details: {
+          activeSceneId,
+          targetSnapshot: snapshot
+        }
+      };
+    }
+  }
+
+  if (typeof game?.user?.updateTokenTargets === "function") {
+    await game.user.updateTokenTargets(snapshots.map((snapshot) => snapshot.tokenId));
+
+    return {
+      ok: true,
+      source: "game.user.updateTokenTargets"
+    };
+  }
+
+  const currentTargets = Array.from(game?.user?.targets ?? []);
+
+  for (const token of currentTargets) {
+    if (typeof token?.setTarget === "function") {
+      token.setTarget(false, {
+        user: game.user,
+        releaseOthers: false,
+        groupSelection: true
+      });
+    }
+  }
+
+  for (const [index, snapshot] of snapshots.entries()) {
+    const tokenDocument = await resolveTokenDocumentFromSnapshot(snapshot);
+    const tokenObject = tokenDocument?.object ?? tokenDocument ?? null;
+
+    if (typeof tokenObject?.setTarget !== "function") {
+      return {
+        ok: false,
+        reason: "selected-target-unresolved",
+        message: "A selected target could not be resolved anymore.",
+        details: {
+          targetSnapshot: snapshot
+        }
+      };
+    }
+
+    tokenObject.setTarget(true, {
+      user: game.user,
+      releaseOthers: index === 0,
+      groupSelection: true
+    });
+  }
+
+  return {
+    ok: true,
+    source: "token.setTarget"
+  };
 }
 
 async function resolveContextDocuments(context) {
@@ -194,107 +299,13 @@ function checkSingleTargetSupport(activity) {
   };
 }
 
-async function setUserTargetSnapshots(targetSnapshots) {
-  const resolvedTokenDocuments = [];
-
-  for (const snapshot of targetSnapshots) {
-    const tokenDocument = await resolveTokenDocumentFromSnapshot(snapshot);
-
-    if (tokenDocument) {
-      resolvedTokenDocuments.push(tokenDocument);
-    }
-  }
-
-  const tokenIds = resolvedTokenDocuments
-    .map((tokenDocument) => tokenDocument.id)
-    .filter((tokenId) => typeof tokenId === "string" && tokenId);
-
-  if (typeof game?.user?.updateTokenTargets === "function") {
-    await game.user.updateTokenTargets(tokenIds);
-    return resolvedTokenDocuments;
-  }
-
-  for (const targetedToken of game?.user?.targets ?? []) {
-    targetedToken.setTarget?.(false, {
-      user: game.user,
-      releaseOthers: false,
-      groupSelection: true
-    });
-  }
-
-  for (const tokenDocument of resolvedTokenDocuments) {
-    const tokenObject = tokenDocument.object ?? tokenDocument;
-    tokenObject.setTarget?.(true, {
-      user: game.user,
-      releaseOthers: false,
-      groupSelection: true
-    });
-  }
-
-  return resolvedTokenDocuments;
-}
-
-async function withTemporaryUserTargets(targetSnapshots, callback) {
-  const previousTargets = getCurrentUserTargetSnapshots();
-
-  await setUserTargetSnapshots(targetSnapshots);
-
-  try {
-    return await callback();
-  } finally {
-    await setUserTargetSnapshots(previousTargets);
-  }
-}
-
-async function resolveFocusTargetSnapshot(context) {
-  const initialTargets = Array.isArray(context?.initialTargets) ? context.initialTargets : [];
-
-  if (!initialTargets.length) {
-    return {
-      ok: false,
-      reason: "focus-target-missing",
-      message: "No initial target is available for focus mode."
-    };
-  }
-
-  if (initialTargets.length > 1) {
-    return {
-      ok: false,
-      reason: "focus-target-ambiguous",
-      message: "Focus mode requires exactly one initial target for extra hits.",
-      details: {
-        initialTargets
-      }
-    };
-  }
-
-  const tokenDocument = await resolveTokenDocumentFromSnapshot(initialTargets[0]);
-
-  if (!tokenDocument) {
-    return {
-      ok: false,
-      reason: "focus-target-unresolved",
-      message: "The initial focus target could not be resolved anymore.",
-      details: {
-        initialTargets
-      }
-    };
-  }
-
-  return {
-    ok: true,
-    source: "context.initialTargets",
-    target: createTokenSnapshot(tokenDocument)
-  };
-}
-
-function resolveRetargetTargetSnapshot() {
+function resolveSelectedTargetSnapshot() {
   const currentTargets = getCurrentUserTargetSnapshots();
 
   if (!currentTargets.length) {
     return {
       ok: false,
-      reason: "retarget-target-missing",
+      reason: "selected-target-missing",
       message: "Select exactly one target before resolving the next extra hit."
     };
   }
@@ -302,7 +313,7 @@ function resolveRetargetTargetSnapshot() {
   if (currentTargets.length > 1) {
     return {
       ok: false,
-      reason: "retarget-target-ambiguous",
+      reason: "selected-target-ambiguous",
       message: "Only one target can be selected when resolving a single extra hit.",
       details: {
         currentTargets
@@ -312,24 +323,123 @@ function resolveRetargetTargetSnapshot() {
 
   return {
     ok: true,
-    source: "game.user.targets",
+    source: "game.user.targets.current",
     target: currentTargets[0]
   };
 }
 
-async function resolveTargetForContext(context) {
-  switch (context?.targetingMode) {
-    case "focus":
-      return resolveFocusTargetSnapshot(context);
-    case "retarget":
-      return resolveRetargetTargetSnapshot();
-    default:
+async function resolveTargetForExtraHit(options = {}) {
+  if (options.targetSnapshot) {
+    const tokenDocument = await resolveTokenDocumentFromSnapshot(options.targetSnapshot);
+
+    if (!tokenDocument) {
       return {
         ok: false,
-        reason: "unsupported-targeting-mode",
-        message: `Unsupported targeting mode "${context?.targetingMode ?? "unknown"}" for phase 2B1.`
+        reason: "selected-target-unresolved",
+        message: "The selected target could not be resolved anymore.",
+        details: {
+          targetSnapshot: options.targetSnapshot
+        }
       };
+    }
+
+    return {
+      ok: true,
+      source: "options.targetSnapshot",
+      target: createTokenSnapshot(tokenDocument)
+    };
   }
+
+  return resolveSelectedTargetSnapshot();
+}
+
+function resolveTargetSnapshotsForRemainingExtraHits(context, options = {}) {
+  const remaining = getContextHitsRemaining(context);
+  const currentTargets = getCurrentUserTargetSnapshots().map((snapshot) => cloneData(snapshot));
+
+  if (Array.isArray(options.targetSnapshots) && options.targetSnapshots.length) {
+    const targets = options.targetSnapshots.map((snapshot) => cloneData(snapshot));
+
+    if (targets.length === 1) {
+      return {
+        ok: true,
+        source: "options.targetSnapshots.repeat",
+        targets: Array.from({ length: remaining }, () => cloneData(targets[0])),
+        restoreTargetSnapshots: currentTargets,
+        distribution: "repeat-single"
+      };
+    }
+
+    if (targets.length > remaining) {
+      return {
+        ok: false,
+        reason: "selected-targets-exceed-remaining",
+        message: `You selected ${targets.length} targets but only ${remaining} hit(s) remain. Reduce your selection and try again.`,
+        details: {
+          selectedCount: targets.length,
+          remaining
+        }
+      };
+    }
+
+    return {
+      ok: true,
+      source: "options.targetSnapshots.sequence",
+      targets,
+      restoreTargetSnapshots: currentTargets,
+      distribution: "one-per-target",
+      selectedCount: targets.length
+    };
+  }
+
+  if (options.targetSnapshot) {
+    return {
+      ok: true,
+      source: "options.targetSnapshot.repeat",
+      targets: Array.from({ length: remaining }, () => cloneData(options.targetSnapshot)),
+      restoreTargetSnapshots: currentTargets,
+      distribution: "repeat-single"
+    };
+  }
+
+  if (!currentTargets.length) {
+    return {
+      ok: false,
+      reason: "selected-target-missing",
+      message: "Select at least one target before resolving remaining extra hits."
+    };
+  }
+
+  if (currentTargets.length === 1) {
+    return {
+      ok: true,
+      source: "game.user.targets.current.single",
+      targets: Array.from({ length: remaining }, () => cloneData(currentTargets[0])),
+      restoreTargetSnapshots: currentTargets,
+      distribution: "repeat-single"
+    };
+  }
+
+  if (currentTargets.length > remaining) {
+    return {
+      ok: false,
+      reason: "selected-targets-exceed-remaining",
+      message: `You selected ${currentTargets.length} targets but only ${remaining} hit(s) remain. Reduce your selection and try again.`,
+      details: {
+        selectedCount: currentTargets.length,
+        remaining
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    source: "game.user.targets.current.multiple",
+    targets: currentTargets,
+    restoreTargetSnapshots: currentTargets,
+    distribution: "one-per-target",
+    selectedCount: currentTargets.length
+  };
 }
 
 function getSpellSlotForContext(context, item) {
@@ -381,7 +491,9 @@ function buildExtraHitDialogConfig(options = {}) {
 }
 
 function buildExtraHitMessageConfig(context, targetSnapshot, options = {}) {
-  const extraHitIndex = Math.max(1, (context.extraHitsTotal - context.extraHitsRemaining) + 1);
+  const totalHits = getContextTotalHits(context);
+  const hitsRemaining = getContextHitsRemaining(context);
+  const hitIndex = Math.max(1, (totalHits - hitsRemaining) + 1);
 
   return {
     create: options.createMessage ?? true,
@@ -390,7 +502,8 @@ function buildExtraHitMessageConfig(context, targetSnapshot, options = {}) {
         [MODULE_ID]: {
           extraHit: {
             contextId: context.id,
-            extraHitIndex,
+            hitIndex,
+            extraHitIndex: hitIndex,
             target: cloneData(targetSnapshot)
           }
         }
@@ -418,12 +531,45 @@ function buildFailureResult(contextId, context, reason, message, details = undef
   };
 }
 
+async function useExtraActivityForTarget(context, item, extraActivity, targetSnapshot, options = {}) {
+  const restoreTargetSnapshots = Array.isArray(options.restoreTargetSnapshots)
+    ? options.restoreTargetSnapshots.map((snapshot) => cloneData(snapshot))
+    : getCurrentUserTargetSnapshots().map((snapshot) => cloneData(snapshot));
+  const selectionResult = await applyUserTargetSnapshots([targetSnapshot]);
+
+  if (!selectionResult.ok) {
+    return selectionResult;
+  }
+
+  try {
+    const usageConfig = buildExtraHitUsageConfig(context, item, options);
+    const dialogConfig = buildExtraHitDialogConfig(options);
+    const messageConfig = buildExtraHitMessageConfig(context, targetSnapshot, options);
+    const results = await extraActivity.use(usageConfig, dialogConfig, messageConfig);
+
+    return {
+      ok: true,
+      results
+    };
+  } finally {
+    const restoreResult = await applyUserTargetSnapshots(restoreTargetSnapshots);
+
+    if (!restoreResult.ok) {
+      debug("Unable to restore user target selection after extra hit resolution.", {
+        contextId: context?.id ?? null,
+        restoreTargetSnapshots,
+        restoreResult
+      });
+    }
+  }
+}
+
 export function cancelCastContext(contextId) {
   const existingContext = getCastContext(contextId);
   const deleted = deleteCastContext(contextId);
 
   if (deleted) {
-    notifyInfo("Extra hit context canceled.", {
+    notifyInfo("Cast context canceled.", {
       contextId
     });
   }
@@ -460,9 +606,9 @@ export async function resolveNextExtraHit(contextId, options = {}) {
     );
   }
 
-  if ((normalizeNonNegativeInteger(context.extraHitsRemaining, 0) ?? 0) <= 0) {
+  if (getContextHitsRemaining(context) <= 0) {
     deleteCastContext(contextId);
-    return buildFailureResult(contextId, null, "no-extra-hits-remaining", "No extra hits remain for this cast context.");
+    return buildFailureResult(contextId, null, "no-hits-remaining", "No hits remain for this cast context.");
   }
 
   const { item, actor, extraActivity } = await resolveContextDocuments(context);
@@ -472,7 +618,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       "missing-documents",
-      "The spell item or extra activity could not be resolved for the extra hit.",
+      "The spell item or hit activity could not be resolved for this cast context.",
       {
         itemUuid: context.itemUuid,
         actorUuid: context.actorUuid,
@@ -488,7 +634,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       targetSupport.reason,
-      "Phase 2B1 only supports mono-target extra-hit activities.",
+      "This module currently supports only mono-target hit activities.",
       {
         activity: summarizeActivity(extraActivity),
         ...targetSupport.details
@@ -496,12 +642,11 @@ export async function resolveNextExtraHit(contextId, options = {}) {
     );
   }
 
-  const targetResolution = await resolveTargetForContext(context);
+  const targetResolution = await resolveTargetForExtraHit(options);
 
   if (!targetResolution.ok) {
     debug("Unable to resolve a valid target for the next extra hit.", {
       contextId,
-      targetingMode: context.targetingMode,
       targetResolution
     });
 
@@ -515,19 +660,24 @@ export async function resolveNextExtraHit(contextId, options = {}) {
   }
 
   const targetSnapshot = targetResolution.target;
-  const usageConfig = buildExtraHitUsageConfig(context, item, options);
-  const dialogConfig = buildExtraHitDialogConfig(options);
-  const messageConfig = buildExtraHitMessageConfig(context, targetSnapshot, options);
+  const useResult = await useExtraActivityForTarget(context, item, extraActivity, targetSnapshot, options);
 
-  let results = null;
-
-  if (context.targetingMode === "focus") {
-    results = await withTemporaryUserTargets([targetSnapshot], async () => {
-      return extraActivity.use(usageConfig, dialogConfig, messageConfig);
+  if (!useResult.ok) {
+    debug("Unable to apply the temporary target selection for the next extra hit.", {
+      contextId,
+      useResult
     });
-  } else {
-    results = await extraActivity.use(usageConfig, dialogConfig, messageConfig);
+
+    return buildFailureResult(
+      contextId,
+      context,
+      useResult.reason,
+      useResult.message,
+      useResult.details
+    );
   }
+
+  const { results } = useResult;
 
   if (!results) {
     return buildFailureResult(
@@ -538,10 +688,10 @@ export async function resolveNextExtraHit(contextId, options = {}) {
     );
   }
 
-  const nextRemaining = Math.max(0, context.extraHitsRemaining - 1);
+  const nextRemaining = Math.max(0, getContextHitsRemaining(context) - 1);
   const nextContext = nextRemaining > 0
     ? updateCastContext(contextId, {
-      extraHitsRemaining: nextRemaining,
+      hitsRemaining: nextRemaining,
       lifecycle: {
         phase: "active",
         lastResolvedAt: new Date().toISOString(),
@@ -558,7 +708,6 @@ export async function resolveNextExtraHit(contextId, options = {}) {
 
   debug("Resolved one extra hit.", {
     contextId,
-    targetingMode: context.targetingMode,
     targetSource: targetResolution.source,
     target: targetSnapshot,
     extraActivity: summarizeActivity(extraActivity),
@@ -582,21 +731,73 @@ export async function resolveNextExtraHit(contextId, options = {}) {
 
 export async function resolveRemainingExtraHits(contextId, options = {}) {
   const iterations = [];
+  const context = getCastContext(contextId);
 
-  while (true) {
-    const currentContext = getCastContext(contextId);
+  if (!context) {
+    return buildFailureResult(contextId, null, "missing-context", "The extra hit context no longer exists.");
+  }
 
-    if (!currentContext) {
-      return {
-        ok: true,
-        contextId,
-        context: null,
-        iterations,
-        completed: true
-      };
-    }
+  if (!canCurrentUserManageContext(context)) {
+    return buildFailureResult(
+      contextId,
+      context,
+      "forbidden-user",
+      "Only the user who created this cast context can resolve its extra hits."
+    );
+  }
 
-    const result = await resolveNextExtraHit(contextId, options);
+  if (context.resolutionMode !== "manual") {
+    return buildFailureResult(
+      contextId,
+      context,
+      "unsupported-resolution-mode",
+      `Resolution mode "${context.resolutionMode ?? "unknown"}" is not supported in phase 2B1.`
+    );
+  }
+
+  if (getContextHitsRemaining(context) <= 0) {
+    deleteCastContext(contextId);
+    return buildFailureResult(contextId, null, "no-hits-remaining", "No hits remain for this cast context.");
+  }
+
+  const targetSequence = resolveTargetSnapshotsForRemainingExtraHits(context, options);
+
+  if (!targetSequence.ok) {
+    debug("Unable to resolve valid targets for resolving remaining extra hits.", {
+      contextId,
+      targetSequence
+    });
+
+    const failure = buildFailureResult(
+      contextId,
+      context,
+      targetSequence.reason,
+      targetSequence.message,
+      targetSequence.details
+    );
+
+    return {
+      ...failure,
+      iterations,
+      completed: false
+    };
+  }
+
+  debug("Resolving remaining extra hits with a prepared target sequence.", {
+    contextId,
+    distribution: targetSequence.distribution,
+    source: targetSequence.source,
+    selectedCount: targetSequence.selectedCount ?? targetSequence.targets.length,
+    resolvedCount: targetSequence.targets.length,
+    limited: false
+  });
+
+  for (const targetSnapshot of targetSequence.targets) {
+    const result = await resolveNextExtraHit(contextId, {
+      ...options,
+      targetSnapshot,
+      restoreTargetSnapshots: targetSequence.restoreTargetSnapshots
+    });
     iterations.push(result);
 
     if (!result.ok) {
@@ -611,13 +812,17 @@ export async function resolveRemainingExtraHits(contextId, options = {}) {
     }
 
     if (result.completed) {
-      return {
-        ok: true,
-        contextId,
-        context: null,
-        iterations,
-        completed: true
-      };
+      break;
     }
   }
+
+  const currentContext = getCastContext(contextId);
+
+  return {
+    ok: true,
+    contextId,
+    context: currentContext,
+    iterations,
+    completed: !currentContext
+  };
 }
