@@ -52,6 +52,26 @@ function localizeText(englishText, frenchText) {
   return game?.i18n?.lang === "fr" ? frenchText : englishText;
 }
 
+function getMultiHitIconMarkup() {
+  return `
+    <svg
+      class="multi-hit-spell-lvl-scaler-icon"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.4">
+        <path d="M2.0 12.4 C4.0 11.0, 5.7 9.6, 7.3 7.8" opacity="0.35"></path>
+        <path d="M3.2 10.7 C5.1 9.7, 6.5 8.6, 7.9 6.9" opacity="0.6"></path>
+        <path d="M4.9 9.0 C6.4 8.2, 7.6 7.0, 8.8 5.5"></path>
+      </g>
+      <g fill="currentColor">
+        <path d="M10.9 3.1 L12.0 4.3 L13.7 4.1 L12.8 5.6 L13.6 7.0 L11.9 6.7 L10.6 7.7 L10.5 6.0 L9.1 5.1 L10.8 4.7 Z"></path>
+      </g>
+    </svg>
+  `;
+}
+
 function listItemActivities(item) {
   return Array.from(item?.system?.activities ?? []).map((entry) => {
     const activity = Array.isArray(entry) ? entry[1] : entry;
@@ -132,7 +152,7 @@ async function onRenderItemSheet5e(app, html) {
     button.href = "#";
   }
 
-  button.innerHTML = '<i class="fa-solid fa-crosshairs" aria-hidden="true"></i>';
+  button.innerHTML = getMultiHitIconMarkup();
   button.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
