@@ -76,6 +76,13 @@ function summarizeToken(token) {
 }
 
 function normalizeContextState(context = {}) {
+  const hitActivityId = typeof context.hitActivityId === "string" && context.hitActivityId
+    ? context.hitActivityId
+    : (typeof context.extraActivityId === "string" && context.extraActivityId)
+      ? context.extraActivityId
+      : (typeof context.baseActivityId === "string" && context.baseActivityId)
+        ? context.baseActivityId
+        : null;
   const totalHits = Math.max(
     1,
     normalizeNonNegativeInteger(
@@ -96,6 +103,9 @@ function normalizeContextState(context = {}) {
 
   return {
     ...context,
+    hitActivityId,
+    baseActivityId: hitActivityId,
+    extraActivityId: hitActivityId,
     totalHits,
     hitsRemaining,
     hitsResolved: Math.max(0, totalHits - hitsRemaining),
@@ -154,12 +164,13 @@ export function createCastContext({
     spellLevel ?? extraHitSummary?.castLevel,
     itemLevel
   );
-  const baseActivityId = (typeof spellConfig?.baseActivityId === "string" && spellConfig.baseActivityId.trim())
-    ? spellConfig.baseActivityId.trim()
-    : (typeof activity?.id === "string" ? activity.id : null);
-  const extraActivityId = (typeof spellConfig?.extraActivityId === "string" && spellConfig.extraActivityId.trim())
-    ? spellConfig.extraActivityId.trim()
-    : baseActivityId;
+  const hitActivityId = (typeof spellConfig?.hitActivityId === "string" && spellConfig.hitActivityId.trim())
+    ? spellConfig.hitActivityId.trim()
+    : (typeof spellConfig?.extraActivityId === "string" && spellConfig.extraActivityId.trim())
+      ? spellConfig.extraActivityId.trim()
+      : (typeof spellConfig?.baseActivityId === "string" && spellConfig.baseActivityId.trim())
+        ? spellConfig.baseActivityId.trim()
+        : (typeof activity?.id === "string" ? activity.id : null);
   const resolvedUserId = (typeof userId === "string" && userId)
     ? userId
     : (typeof game?.user?.id === "string" ? game.user.id : null);
@@ -173,15 +184,16 @@ export function createCastContext({
     itemUuid: typeof item?.uuid === "string" ? item.uuid : null,
     actorUuid: typeof actor?.uuid === "string" ? actor.uuid : null,
     tokenUuid: typeof tokenDocument?.uuid === "string" ? tokenDocument.uuid : null,
-    baseActivityId,
-    extraActivityId,
+    hitActivityId,
+    baseActivityId: hitActivityId,
+    extraActivityId: hitActivityId,
     castLevel,
     totalHits,
     hitsResolved: normalizedResolvedHitCount,
     hitsRemaining,
     extraHitsTotal: totalHits,
     extraHitsRemaining: hitsRemaining,
-    resolutionMode: typeof spellConfig?.resolutionMode === "string" ? spellConfig.resolutionMode : null,
+    resolutionMode: typeof spellConfig?.resolutionMode === "string" ? spellConfig.resolutionMode : "manual",
     userId: resolvedUserId,
     lifecycle: {
       phase: "detected"

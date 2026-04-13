@@ -191,6 +191,19 @@ function resolveActivity(activity, item) {
     ?? null;
 }
 
+function resolveConfiguredHitActivity(activity, item, spellConfig = {}) {
+  const configuredHitActivityId = (typeof spellConfig?.hitActivityId === "string" && spellConfig.hitActivityId)
+    ? spellConfig.hitActivityId
+    : (typeof spellConfig?.extraActivityId === "string" && spellConfig.extraActivityId)
+      ? spellConfig.extraActivityId
+      : (typeof spellConfig?.baseActivityId === "string" && spellConfig.baseActivityId)
+        ? spellConfig.baseActivityId
+        : null;
+
+  return item?.system?.activities?.get?.(configuredHitActivityId)
+    ?? resolveActivity(activity, item);
+}
+
 function resolveToken(activity, actor) {
   const activeToken = actor?.getActiveTokens?.()?.[0] ?? null;
 
@@ -292,7 +305,16 @@ function shouldHandleActivity(item, activity, spellConfig) {
     return false;
   }
 
-  if (spellConfig.baseActivityId && (activity?.id !== spellConfig.baseActivityId)) {
+  const acceptedActivityIds = [
+    spellConfig?.hitActivityId,
+    spellConfig?.baseActivityId
+  ].filter((activityId) => typeof activityId === "string" && activityId);
+
+  if (!acceptedActivityIds.length) {
+    return false;
+  }
+
+  if (acceptedActivityIds.length && !acceptedActivityIds.includes(activity?.id)) {
     return false;
   }
 
@@ -368,7 +390,7 @@ async function resolveConfiguredInitialCast(activity, usageConfig = {}, dialogCo
   const actor = activity?.actor ?? activity?.item?.actor ?? null;
   const item = resolveItem(activity, actor);
   const spellConfig = item ? getSpellConfig(item) : null;
-  const controlledActivity = resolveActivity(activity, item);
+  const controlledActivity = resolveConfiguredHitActivity(activity, item, spellConfig);
 
   if (!shouldHandleActivity(item, controlledActivity, spellConfig)) {
     return;

@@ -28,7 +28,6 @@ function buildPromptContent(context) {
     <div class="${MODULE_ID}-extra-hit-prompt">
       <p><strong>${context.item?.name ?? "Configured spell"}</strong></p>
       <p>Hits restants : <strong>${hitsRemaining}</strong> / ${totalHits}</p>
-      <p>Mode de resolution : <strong>${context.resolutionMode ?? "unknown"}</strong></p>
       <p>Next Hit utilise la cible actuellement selectionnee.</p>
       <p>Resolve All consomme 1 hit par cible selectionnee, ou tous les hits restants sur l'unique cible selectionnee.</p>
       <p>La selection ne doit jamais depasser le nombre de hits disponibles.</p>

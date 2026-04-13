@@ -258,12 +258,12 @@ async function applyUserTargetSnapshots(targetSnapshots = []) {
 async function resolveContextDocuments(context) {
   const item = context?.itemUuid ? await fromUuid(context.itemUuid) : null;
   const actor = item?.actor ?? (context?.actorUuid ? await fromUuid(context.actorUuid) : null);
-  const extraActivity = item?.system?.activities?.get?.(context?.extraActivityId) ?? null;
+  const hitActivity = item?.system?.activities?.get?.(context?.hitActivityId ?? context?.extraActivityId ?? context?.baseActivityId) ?? null;
 
   return {
     item,
     actor,
-    extraActivity
+    hitActivity
   };
 }
 
@@ -280,22 +280,9 @@ function checkSingleTargetSupport(activity) {
     };
   }
 
-  const rawTargetCount = activity?.target?.affects?.count;
-  const targetCount = normalizeNonNegativeInteger(rawTargetCount, 1) ?? 1;
-
-  if (targetCount > 1) {
-    return {
-      ok: false,
-      reason: "multi-target-extra-hit-not-supported",
-      details: {
-        targetCount
-      }
-    };
-  }
-
   return {
     ok: true,
-    targetCount: 1
+    targetCount: normalizeNonNegativeInteger(activity?.target?.affects?.count, 1) ?? 1
   };
 }
 
@@ -531,7 +518,7 @@ function buildFailureResult(contextId, context, reason, message, details = undef
   };
 }
 
-async function useExtraActivityForTarget(context, item, extraActivity, targetSnapshot, options = {}) {
+async function useExtraActivityForTarget(context, item, hitActivity, targetSnapshot, options = {}) {
   const restoreTargetSnapshots = Array.isArray(options.restoreTargetSnapshots)
     ? options.restoreTargetSnapshots.map((snapshot) => cloneData(snapshot))
     : getCurrentUserTargetSnapshots().map((snapshot) => cloneData(snapshot));
@@ -545,7 +532,15 @@ async function useExtraActivityForTarget(context, item, extraActivity, targetSna
     const usageConfig = buildExtraHitUsageConfig(context, item, options);
     const dialogConfig = buildExtraHitDialogConfig(options);
     const messageConfig = buildExtraHitMessageConfig(context, targetSnapshot, options);
-    const results = await extraActivity.use(usageConfig, dialogConfig, messageConfig);
+
+    debug("Resolving a controlled hit with a forced single-target selection.", {
+      contextId: context?.id ?? null,
+      target: targetSnapshot,
+      hitActivity: summarizeActivity(hitActivity),
+      nativeTargetCount: normalizeNonNegativeInteger(hitActivity?.target?.affects?.count, 1) ?? 1
+    });
+
+    const results = await hitActivity.use(usageConfig, dialogConfig, messageConfig);
 
     return {
       ok: true,
@@ -611,9 +606,9 @@ export async function resolveNextExtraHit(contextId, options = {}) {
     return buildFailureResult(contextId, null, "no-hits-remaining", "No hits remain for this cast context.");
   }
 
-  const { item, actor, extraActivity } = await resolveContextDocuments(context);
+  const { item, actor, hitActivity } = await resolveContextDocuments(context);
 
-  if (!item || !actor || !extraActivity) {
+  if (!item || !actor || !hitActivity) {
     return buildFailureResult(
       contextId,
       context,
@@ -622,21 +617,21 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       {
         itemUuid: context.itemUuid,
         actorUuid: context.actorUuid,
-        extraActivityId: context.extraActivityId
+        hitActivityId: context.hitActivityId ?? context.extraActivityId ?? context.baseActivityId
       }
     );
   }
 
-  const targetSupport = checkSingleTargetSupport(extraActivity);
+  const targetSupport = checkSingleTargetSupport(hitActivity);
 
   if (!targetSupport.ok) {
     return buildFailureResult(
       contextId,
       context,
       targetSupport.reason,
-      "This module currently supports only mono-target hit activities.",
+      "This module currently does not support template-based hit activities in controlled hit resolution.",
       {
-        activity: summarizeActivity(extraActivity),
+        activity: summarizeActivity(hitActivity),
         ...targetSupport.details
       }
     );
@@ -660,7 +655,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
   }
 
   const targetSnapshot = targetResolution.target;
-  const useResult = await useExtraActivityForTarget(context, item, extraActivity, targetSnapshot, options);
+  const useResult = await useExtraActivityForTarget(context, item, hitActivity, targetSnapshot, options);
 
   if (!useResult.ok) {
     debug("Unable to apply the temporary target selection for the next extra hit.", {
@@ -710,7 +705,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
     contextId,
     targetSource: targetResolution.source,
     target: targetSnapshot,
-    extraActivity: summarizeActivity(extraActivity),
+    hitActivity: summarizeActivity(hitActivity),
     results: {
       messageId: typeof results?.message?.id === "string" ? results.message.id : null,
       messageUuid: typeof results?.message?.uuid === "string" ? results.message.uuid : null

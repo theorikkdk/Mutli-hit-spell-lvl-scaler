@@ -35,17 +35,11 @@ export const RESOLUTION_MODES = Object.freeze({
 
 export const DEFAULT_SPELL_CONFIG = Object.freeze({
   enabled: false,
-  baseActivityId: "",
-  extraActivityId: "",
-  countMode: COUNT_MODES.FIXED,
-  fixedCount: 0,
-  slotScaling: Object.freeze({
-    baseLevel: null,
-    perLevel: 1,
-    countOnly: true
-  }),
-  promptLabel: "",
-  resolutionMode: RESOLUTION_MODES.MANUAL
+  hitActivityId: "",
+  baseLevel: null,
+  baseTotalHits: 1,
+  hitsPerSlotLevel: 0,
+  promptLabel: ""
 });
 
 function cloneData(data) {
@@ -72,6 +66,16 @@ function normalizeInteger(value, fallback = 0) {
   }
 
   return Math.max(0, Math.trunc(numericValue));
+}
+
+function normalizePositiveInteger(value, fallback = 1) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.trunc(numericValue));
 }
 
 function normalizeNullableInteger(value, fallback = null) {
@@ -151,21 +155,47 @@ export function registerSettings() {
 export function normalizeSpellConfig(source = {}) {
   const defaults = cloneData(DEFAULT_SPELL_CONFIG);
   const slotScaling = source?.slotScaling ?? {};
+  const legacyBaseActivityId = normalizeString(source.baseActivityId, "");
+  const legacyExtraActivityId = normalizeString(source.extraActivityId, "");
+  const legacyCountMode = normalizeEnum(source.countMode, COUNT_MODES, COUNT_MODES.FIXED);
+  const legacyFixedCount = normalizeInteger(source.fixedCount, 0);
+  const migratedHitActivityId = normalizeString(
+    source.hitActivityId,
+    legacyExtraActivityId || legacyBaseActivityId || defaults.hitActivityId
+  );
+  const migratedBaseLevel = normalizeNullableInteger(
+    source.baseLevel,
+    normalizeNullableInteger(slotScaling.baseLevel, defaults.baseLevel)
+  );
+  const migratedBaseTotalHits = normalizePositiveInteger(
+    source.baseTotalHits,
+    1 + legacyFixedCount
+  );
+  const migratedHitsPerSlotLevel = normalizeInteger(
+    source.hitsPerSlotLevel,
+    legacyCountMode === COUNT_MODES.SLOT_SCALING
+      ? normalizeInteger(slotScaling.perLevel, defaults.hitsPerSlotLevel)
+      : defaults.hitsPerSlotLevel
+  );
 
-  return {
+  const normalizedConfig = {
     enabled: normalizeBoolean(source.enabled, defaults.enabled),
-    baseActivityId: normalizeString(source.baseActivityId, defaults.baseActivityId),
-    extraActivityId: normalizeString(source.extraActivityId, defaults.extraActivityId),
-    countMode: normalizeEnum(source.countMode, COUNT_MODES, defaults.countMode),
-    fixedCount: normalizeInteger(source.fixedCount, defaults.fixedCount),
-    slotScaling: {
-      baseLevel: normalizeNullableInteger(slotScaling.baseLevel, defaults.slotScaling.baseLevel),
-      perLevel: normalizeInteger(slotScaling.perLevel, defaults.slotScaling.perLevel),
-      countOnly: normalizeBoolean(slotScaling.countOnly, defaults.slotScaling.countOnly)
-    },
-    promptLabel: normalizeString(source.promptLabel, defaults.promptLabel),
-    resolutionMode: normalizeEnum(source.resolutionMode, RESOLUTION_MODES, defaults.resolutionMode)
+    hitActivityId: migratedHitActivityId,
+    baseLevel: migratedBaseLevel,
+    baseTotalHits: migratedBaseTotalHits,
+    hitsPerSlotLevel: migratedHitsPerSlotLevel,
+    promptLabel: normalizeString(source.promptLabel, defaults.promptLabel)
   };
+
+  if (legacyBaseActivityId) {
+    normalizedConfig.baseActivityId = legacyBaseActivityId;
+  }
+
+  if (legacyExtraActivityId) {
+    normalizedConfig.extraActivityId = legacyExtraActivityId;
+  }
+
+  return normalizedConfig;
 }
 
 export function createSpellConfig(overrides = {}) {
