@@ -40,4 +40,4 @@ These names match the URLs currently declared in `module.json`.
 
 - The GitHub repository is `theorikkdk/multi-hit-spell-lvl-scaler`.
 - The manifest URLs in `module.json` target that repository's GitHub release assets.
-- `license` is set to `MIT`, and the full license text is provided in `LICENSE`.
+- `license` is set to `Custom License - Non-Commercial`, and the full license text is provided in `LICENSE`.
