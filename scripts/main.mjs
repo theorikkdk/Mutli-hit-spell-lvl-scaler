@@ -6,10 +6,12 @@ import {
   registerModuleApi,
   registerSettings
 } from "./module.mjs";
+import { registerItemSheetHeaderButton } from "./ui/item-sheet-header-button.mjs";
 import { registerCastDetector } from "./workflows/cast-detector.mjs";
 
 Hooks.once("init", () => {
   registerSettings();
+  registerItemSheetHeaderButton();
 
   const api = registerModuleApi();
 

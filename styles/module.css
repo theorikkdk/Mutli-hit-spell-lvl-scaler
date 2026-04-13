@@ -1,0 +1,37 @@
+.multi-hit-spell-lvl-scaler-open-button {
+  min-width: 28px;
+  padding-inline: 0.35rem;
+}
+
+.multi-hit-spell-lvl-scaler-open-button i {
+  margin: 0;
+}
+
+.multi-hit-spell-lvl-scaler-open-button.is-disabled i {
+  color: #f5f5f5;
+}
+
+.multi-hit-spell-lvl-scaler-open-button.is-valid i {
+  color: #4ea96a;
+}
+
+.multi-hit-spell-lvl-scaler-open-button.is-invalid i {
+  color: #d89b3c;
+}
+
+.multi-hit-spell-lvl-scaler-config-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.multi-hit-spell-lvl-scaler-config-form .form-group {
+  margin: 0;
+}
+
+.multi-hit-spell-lvl-scaler-config-form .hint {
+  margin: 0.25rem 0 0;
+}
+
+.multi-hit-spell-lvl-scaler-derived-base-level {
+  margin: 0;
+}

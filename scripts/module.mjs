@@ -100,6 +100,37 @@ function getModule() {
   return game?.modules?.get?.(MODULE_ID) ?? null;
 }
 
+function resolveCurrentItemDocument(item) {
+  if (!item?.id) {
+    return item ?? null;
+  }
+
+  if (item.parent?.items?.get) {
+    return item.parent.items.get(item.id) ?? item;
+  }
+
+  if (game?.items?.get) {
+    return game.items.get(item.id) ?? item;
+  }
+
+  return item;
+}
+
+function applyDerivedSpellConfig(item, config = {}) {
+  const nextConfig = cloneData(config ?? {});
+
+  if (item?.type === "spell") {
+    const itemLevel = normalizeNullableInteger(item?.system?.level, nextConfig.baseLevel ?? null);
+
+    if (itemLevel !== null) {
+      nextConfig.baseLevel = itemLevel;
+    }
+  }
+
+  nextConfig.promptLabel = "";
+  return nextConfig;
+}
+
 function getModuleVersion() {
   return getModule()?.version ?? "dev";
 }
@@ -203,8 +234,9 @@ export function createSpellConfig(overrides = {}) {
 }
 
 export function getSpellConfig(item) {
-  const rawConfig = item?.getFlag?.(MODULE_ID, FLAG_KEY) ?? item?.flags?.[MODULE_ID]?.[FLAG_KEY] ?? {};
-  return normalizeSpellConfig(rawConfig);
+  const currentItem = resolveCurrentItemDocument(item);
+  const rawConfig = currentItem?.getFlag?.(MODULE_ID, FLAG_KEY) ?? currentItem?.flags?.[MODULE_ID]?.[FLAG_KEY] ?? {};
+  return applyDerivedSpellConfig(currentItem, normalizeSpellConfig(rawConfig));
 }
 
 export function isSpellConfigEnabled(item) {
@@ -212,19 +244,27 @@ export function isSpellConfigEnabled(item) {
 }
 
 export async function setSpellConfig(item, config = {}) {
-  if (!item?.setFlag) {
+  const currentItem = resolveCurrentItemDocument(item);
+
+  if (!currentItem?.setFlag) {
     throw new Error(`${MODULE_TITLE} | The provided document cannot store module flags.`);
   }
 
-  return item.setFlag(MODULE_ID, FLAG_KEY, normalizeSpellConfig(config));
+  return currentItem.setFlag(
+    MODULE_ID,
+    FLAG_KEY,
+    applyDerivedSpellConfig(currentItem, normalizeSpellConfig(config))
+  );
 }
 
 export async function clearSpellConfig(item) {
-  if (!item?.unsetFlag) {
+  const currentItem = resolveCurrentItemDocument(item);
+
+  if (!currentItem?.unsetFlag) {
     throw new Error(`${MODULE_TITLE} | The provided document cannot clear module flags.`);
   }
 
-  return item.unsetFlag(MODULE_ID, FLAG_KEY);
+  return currentItem.unsetFlag(MODULE_ID, FLAG_KEY);
 }
 
 export function createApi() {
