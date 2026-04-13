@@ -7,34 +7,59 @@
         "Hint": "Ecrit des diagnostics supplementaires du module dans la console du navigateur."
       }
     },
-    "Schema": {
-      "Enabled": "Active",
-      "BaseActivityId": "Id de l'activite de base",
-      "ExtraActivityId": "Id de l'activite supplementaire",
-      "CountMode": "Mode de comptage",
-      "FixedCount": "Nombre fixe de hits supplementaires",
-      "PromptLabel": "Libelle du prompt",
-      "TargetingMode": "Mode de ciblage",
-      "ResolutionMode": "Mode de resolution",
-      "SlotScaling": {
-        "BaseLevel": "Niveau de sort de base",
-        "PerLevel": "Hits supplementaires par niveau d'emplacement",
-        "CountOnly": "Compter uniquement"
+    "Ui": {
+      "HeaderButton": {
+        "AriaLabel": "Ouvrir la configuration Multi-Hit",
+        "TooltipDisabled": "Multi-Hit desactive",
+        "TooltipValid": "Multi-Hit actif et pret",
+        "TooltipInvalid": "Multi-Hit actif, mais la configuration est incomplete"
+      },
+      "SpellConfig": {
+        "Title": "Multi-Hit : {itemName}",
+        "FallbackSpellName": "Sort",
+        "Enable": "Activer Multi-Hit",
+        "HitActivity": "Activite de hit",
+        "SelectActivity": "Selectionner une activite",
+        "UnknownActivity": "Activite inconnue ({activityId})",
+        "ActivityHintAvailable": "Chaque hit reutilisera cette activite.",
+        "ActivityHintMissing": "Ce sort ne contient actuellement aucune activite utilisable.",
+        "BaseTotalHits": "Nombre total de hits de base",
+        "HitsPerSlotLevel": "Hits gagnes par niveau de slot",
+        "DerivedBaseLevel": "Le niveau de base est derive automatiquement depuis le niveau du sort {spellLevel}.",
+        "Save": "Enregistrer",
+        "Cancel": "Annuler",
+        "Saved": "Configuration Multi-Hit enregistree."
+      },
+      "ExtraHitPrompt": {
+        "Title": "Hits restants : {itemName}",
+        "FallbackSpellName": "Sort configure",
+        "RemainingHits": "Hits restants : {hitsRemaining} / {totalHits}",
+        "NextHitHint": "Prochain hit utilise la cible actuellement selectionnee.",
+        "ResolveAllHint": "Tout resoudre consomme 1 hit par cible selectionnee, ou tous les hits restants sur l'unique cible selectionnee.",
+        "SelectionHint": "La selection ne doit jamais depasser le nombre de hits disponibles.",
+        "NextHit": "Prochain hit",
+        "ResolveAll": "Tout resoudre",
+        "Cancel": "Annuler"
       }
     },
-    "Options": {
-      "CountModes": {
-        "Fixed": "Fixe",
-        "SlotScaling": "Scaling par emplacement"
-      },
-      "TargetingModes": {
-        "Retarget": "Changer de cible entre les hits",
-        "Focus": "Tout sur la meme cible"
-      },
-      "ResolutionModes": {
-        "Manual": "Manuel pas a pas",
-        "Auto": "Automatique"
-      }
+    "Notifications": {
+      "CastContextCanceled": "Contexte de cast annule.",
+      "ConfigTargetRange": "Selectionnez entre 1 et {totalHits} cible(s) avant de lancer ce sort configure.",
+      "ConfigTooManyTargets": "Vous avez selectionne {selectedCount} cible(s), mais ce lancement ne fournit que {totalHits} hit(s). Reduisez la selection puis recommencez.",
+      "InitialTargetPrepareFailed": "La cible initiale n'a pas pu etre preparee pour un cast mono-cible controle.",
+      "TargetUnresolved": "Une cible selectionnee n'a pas pu etre resolue.",
+      "TargetOffScene": "La cible selectionnee n'est plus sur la scene active.",
+      "NextHitSelectOne": "Selectionnez exactement une cible avant de resoudre le prochain hit.",
+      "SingleHitTooManyTargets": "Une seule cible peut etre selectionnee pour resoudre un hit unique.",
+      "RemainingHitsSelectAtLeastOne": "Selectionnez au moins une cible avant de resoudre les hits restants.",
+      "TooManyTargetsForRemainingHits": "Vous avez selectionne {selectedCount} cible(s), mais il ne reste que {remaining} hit(s). Reduisez la selection puis recommencez.",
+      "MissingContext": "Le contexte de hits n'existe plus.",
+      "ForbiddenUser": "Seul l'utilisateur qui a cree ce contexte peut resoudre les hits restants.",
+      "UnsupportedResolutionMode": "Le mode de resolution \"{mode}\" n'est pas pris en charge ici.",
+      "NoHitsRemaining": "Il ne reste plus de hits dans ce contexte.",
+      "MissingDocuments": "L'item du sort ou l'activite de hit n'a pas pu etre resolu pour ce contexte.",
+      "TemplateActivitiesUnsupported": "Les activites de hit basees sur un gabarit ne sont pas prises en charge dans cette resolution controlee.",
+      "ActivityUseCancelled": "Le hit n'a pas ete resolu car l'activite dnd5e n'a pas abouti."
     }
   }
 }

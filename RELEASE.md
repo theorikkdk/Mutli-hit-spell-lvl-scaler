@@ -5,6 +5,7 @@
 The release zip should contain the module root files directly:
 
 - `module.json`
+- `LICENSE`
 - `README.md`
 - `lang/`
 - `scripts/`
@@ -14,6 +15,7 @@ Do not include:
 
 - `.git/`
 - `.gitignore`
+- `RELEASE.md`
 - local editor files
 - old zip files
 - temporary notes or local-only artifacts

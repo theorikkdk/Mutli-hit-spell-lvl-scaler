@@ -1,3 +1,4 @@
+import { formatLocalization, localize } from "../i18n.mjs";
 import {
   deleteCastContext,
   getCastContext,
@@ -186,7 +187,7 @@ async function applyUserTargetSnapshots(targetSnapshots = []) {
       return {
         ok: false,
         reason: "selected-target-unresolved",
-        message: "A selected target could not be resolved anymore.",
+        message: localize("Notifications.TargetUnresolved", "A selected target could no longer be resolved."),
         details: {
           targetSnapshot: snapshot
         }
@@ -197,7 +198,7 @@ async function applyUserTargetSnapshots(targetSnapshots = []) {
       return {
         ok: false,
         reason: "selected-target-off-scene",
-        message: "The selected target is not on the active scene anymore.",
+        message: localize("Notifications.TargetOffScene", "The selected target is no longer on the active scene."),
         details: {
           activeSceneId,
           targetSnapshot: snapshot
@@ -235,7 +236,7 @@ async function applyUserTargetSnapshots(targetSnapshots = []) {
       return {
         ok: false,
         reason: "selected-target-unresolved",
-        message: "A selected target could not be resolved anymore.",
+        message: localize("Notifications.TargetUnresolved", "A selected target could no longer be resolved."),
         details: {
           targetSnapshot: snapshot
         }
@@ -293,7 +294,7 @@ function resolveSelectedTargetSnapshot() {
     return {
       ok: false,
       reason: "selected-target-missing",
-      message: "Select exactly one target before resolving the next extra hit."
+      message: localize("Notifications.NextHitSelectOne", "Select exactly one target before resolving the next hit.")
     };
   }
 
@@ -301,7 +302,7 @@ function resolveSelectedTargetSnapshot() {
     return {
       ok: false,
       reason: "selected-target-ambiguous",
-      message: "Only one target can be selected when resolving a single extra hit.",
+      message: localize("Notifications.SingleHitTooManyTargets", "Only one target can be selected when resolving a single hit."),
       details: {
         currentTargets
       }
@@ -323,7 +324,7 @@ async function resolveTargetForExtraHit(options = {}) {
       return {
         ok: false,
         reason: "selected-target-unresolved",
-        message: "The selected target could not be resolved anymore.",
+        message: localize("Notifications.TargetUnresolved", "A selected target could no longer be resolved."),
         details: {
           targetSnapshot: options.targetSnapshot
         }
@@ -361,7 +362,14 @@ function resolveTargetSnapshotsForRemainingExtraHits(context, options = {}) {
       return {
         ok: false,
         reason: "selected-targets-exceed-remaining",
-        message: `You selected ${targets.length} targets but only ${remaining} hit(s) remain. Reduce your selection and try again.`,
+        message: formatLocalization(
+          "Notifications.TooManyTargetsForRemainingHits",
+          {
+            selectedCount: targets.length,
+            remaining
+          },
+          "You selected {selectedCount} target(s), but only {remaining} hit(s) remain. Reduce your selection and try again."
+        ),
         details: {
           selectedCount: targets.length,
           remaining
@@ -393,7 +401,7 @@ function resolveTargetSnapshotsForRemainingExtraHits(context, options = {}) {
     return {
       ok: false,
       reason: "selected-target-missing",
-      message: "Select at least one target before resolving remaining extra hits."
+      message: localize("Notifications.RemainingHitsSelectAtLeastOne", "Select at least one target before resolving the remaining hits.")
     };
   }
 
@@ -411,7 +419,14 @@ function resolveTargetSnapshotsForRemainingExtraHits(context, options = {}) {
     return {
       ok: false,
       reason: "selected-targets-exceed-remaining",
-      message: `You selected ${currentTargets.length} targets but only ${remaining} hit(s) remain. Reduce your selection and try again.`,
+      message: formatLocalization(
+        "Notifications.TooManyTargetsForRemainingHits",
+        {
+          selectedCount: currentTargets.length,
+          remaining
+        },
+        "You selected {selectedCount} target(s), but only {remaining} hit(s) remain. Reduce your selection and try again."
+      ),
       details: {
         selectedCount: currentTargets.length,
         remaining
@@ -564,7 +579,7 @@ export function cancelCastContext(contextId) {
   const deleted = deleteCastContext(contextId);
 
   if (deleted) {
-    notifyInfo("Cast context canceled.", {
+    notifyInfo(localize("Notifications.CastContextCanceled", "Cast context canceled."), {
       contextId
     });
   }
@@ -580,7 +595,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
   const context = getCastContext(contextId);
 
   if (!context) {
-    return buildFailureResult(contextId, null, "missing-context", "The extra hit context no longer exists.");
+    return buildFailureResult(contextId, null, "missing-context", localize("Notifications.MissingContext", "The hit context no longer exists."));
   }
 
   if (!canCurrentUserManageContext(context)) {
@@ -588,7 +603,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       "forbidden-user",
-      "Only the user who created this cast context can resolve its extra hits."
+      localize("Notifications.ForbiddenUser", "Only the user who created this cast context can resolve its remaining hits.")
     );
   }
 
@@ -597,13 +612,19 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       "unsupported-resolution-mode",
-      `Resolution mode "${context.resolutionMode ?? "unknown"}" is not supported in phase 2B1.`
+      formatLocalization(
+        "Notifications.UnsupportedResolutionMode",
+        {
+          mode: context.resolutionMode ?? "unknown"
+        },
+        "Resolution mode \"{mode}\" is not supported here."
+      )
     );
   }
 
   if (getContextHitsRemaining(context) <= 0) {
     deleteCastContext(contextId);
-    return buildFailureResult(contextId, null, "no-hits-remaining", "No hits remain for this cast context.");
+    return buildFailureResult(contextId, null, "no-hits-remaining", localize("Notifications.NoHitsRemaining", "No hits remain in this context."));
   }
 
   const { item, actor, hitActivity } = await resolveContextDocuments(context);
@@ -613,7 +634,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       "missing-documents",
-      "The spell item or hit activity could not be resolved for this cast context.",
+      localize("Notifications.MissingDocuments", "The spell item or hit activity could not be resolved for this context."),
       {
         itemUuid: context.itemUuid,
         actorUuid: context.actorUuid,
@@ -629,7 +650,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       targetSupport.reason,
-      "This module currently does not support template-based hit activities in controlled hit resolution.",
+      localize("Notifications.TemplateActivitiesUnsupported", "Template-based hit activities are not supported in this controlled resolution flow."),
       {
         activity: summarizeActivity(hitActivity),
         ...targetSupport.details
@@ -679,7 +700,7 @@ export async function resolveNextExtraHit(contextId, options = {}) {
       contextId,
       context,
       "activity-use-cancelled",
-      "The extra hit was not resolved because the dnd5e activity did not complete."
+      localize("Notifications.ActivityUseCancelled", "The hit was not resolved because the dnd5e activity did not complete.")
     );
   }
 
@@ -729,7 +750,7 @@ export async function resolveRemainingExtraHits(contextId, options = {}) {
   const context = getCastContext(contextId);
 
   if (!context) {
-    return buildFailureResult(contextId, null, "missing-context", "The extra hit context no longer exists.");
+    return buildFailureResult(contextId, null, "missing-context", localize("Notifications.MissingContext", "The hit context no longer exists."));
   }
 
   if (!canCurrentUserManageContext(context)) {
@@ -737,7 +758,7 @@ export async function resolveRemainingExtraHits(contextId, options = {}) {
       contextId,
       context,
       "forbidden-user",
-      "Only the user who created this cast context can resolve its extra hits."
+      localize("Notifications.ForbiddenUser", "Only the user who created this cast context can resolve its remaining hits.")
     );
   }
 
@@ -746,13 +767,19 @@ export async function resolveRemainingExtraHits(contextId, options = {}) {
       contextId,
       context,
       "unsupported-resolution-mode",
-      `Resolution mode "${context.resolutionMode ?? "unknown"}" is not supported in phase 2B1.`
+      formatLocalization(
+        "Notifications.UnsupportedResolutionMode",
+        {
+          mode: context.resolutionMode ?? "unknown"
+        },
+        "Resolution mode \"{mode}\" is not supported here."
+      )
     );
   }
 
   if (getContextHitsRemaining(context) <= 0) {
     deleteCastContext(contextId);
-    return buildFailureResult(contextId, null, "no-hits-remaining", "No hits remain for this cast context.");
+    return buildFailureResult(contextId, null, "no-hits-remaining", localize("Notifications.NoHitsRemaining", "No hits remain in this context."));
   }
 
   const targetSequence = resolveTargetSnapshotsForRemainingExtraHits(context, options);

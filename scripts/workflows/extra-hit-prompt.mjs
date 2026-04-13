@@ -1,3 +1,4 @@
+import { formatLocalization, localize } from "../i18n.mjs";
 import { getCastContext } from "../runtime/cast-context.mjs";
 import {
   cancelCastContext,
@@ -8,6 +9,14 @@ import {
 const MODULE_ID = "multi-hit-spell-lvl-scaler";
 const OPEN_PROMPTS = new Map();
 const DialogV2 = foundry?.applications?.api?.DialogV2 ?? null;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
 
 function closePrompt(contextId) {
   const existingPrompt = OPEN_PROMPTS.get(contextId);
@@ -23,14 +32,19 @@ function closePrompt(contextId) {
 function buildPromptContent(context) {
   const totalHits = context.totalHits ?? context.extraHitsTotal ?? 0;
   const hitsRemaining = context.hitsRemaining ?? context.extraHitsRemaining ?? 0;
+  const itemName = context.item?.name ?? localize("Ui.ExtraHitPrompt.FallbackSpellName", "Configured spell");
 
   return `
     <div class="${MODULE_ID}-extra-hit-prompt">
-      <p><strong>${context.item?.name ?? "Configured spell"}</strong></p>
-      <p>Hits restants : <strong>${hitsRemaining}</strong> / ${totalHits}</p>
-      <p>Next Hit utilise la cible actuellement selectionnee.</p>
-      <p>Resolve All consomme 1 hit par cible selectionnee, ou tous les hits restants sur l'unique cible selectionnee.</p>
-      <p>La selection ne doit jamais depasser le nombre de hits disponibles.</p>
+      <p><strong>${escapeHtml(itemName)}</strong></p>
+      <p>${escapeHtml(formatLocalization(
+        "Ui.ExtraHitPrompt.RemainingHits",
+        { hitsRemaining, totalHits },
+        "Hits remaining: {hitsRemaining} / {totalHits}"
+      ))}</p>
+      <p>${escapeHtml(localize("Ui.ExtraHitPrompt.NextHitHint", "Next Hit uses the currently selected target."))}</p>
+      <p>${escapeHtml(localize("Ui.ExtraHitPrompt.ResolveAllHint", "Resolve All spends 1 hit per selected target, or all remaining hits on the only selected target."))}</p>
+      <p>${escapeHtml(localize("Ui.ExtraHitPrompt.SelectionHint", "Your selection must never exceed the number of available hits."))}</p>
     </div>
   `;
 }
@@ -72,24 +86,30 @@ export function promptExtraHitResolution(contextId) {
   const buttons = [
     {
       action: "next",
-      label: "Next Hit",
+      label: localize("Ui.ExtraHitPrompt.NextHit", "Next Hit"),
       callback: async () => handleNext(contextId)
     },
     {
       action: "resolveAll",
-      label: "Resolve All",
+      label: localize("Ui.ExtraHitPrompt.ResolveAll", "Resolve All"),
       callback: async () => handleResolveAll(contextId)
     },
     {
       action: "cancel",
-      label: "Cancel",
+      label: localize("Ui.ExtraHitPrompt.Cancel", "Cancel"),
       callback: async () => handleCancel(contextId)
     }
   ];
 
   const prompt = new DialogV2({
     window: {
-      title: `Hits: ${context.item?.name ?? context.id}`
+      title: formatLocalization(
+        "Ui.ExtraHitPrompt.Title",
+        {
+          itemName: context.item?.name ?? context.id
+        },
+        "Remaining hits: {itemName}"
+      )
     },
     content: buildPromptContent(context),
     buttons,

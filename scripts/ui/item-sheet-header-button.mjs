@@ -1,3 +1,4 @@
+import { localize } from "../i18n.mjs";
 import { getSpellConfig } from "../module.mjs";
 import { openSpellConfigDialog } from "./spell-config-dialog.mjs";
 
@@ -48,10 +49,6 @@ function findHeaderContainer(root) {
   };
 }
 
-function localizeText(englishText, frenchText) {
-  return game?.i18n?.lang === "fr" ? frenchText : englishText;
-}
-
 function getMultiHitIconMarkup() {
   return `
     <svg
@@ -94,29 +91,20 @@ function getConfigState(item) {
   if (!config.enabled) {
     return {
       status: "disabled",
-      tooltip: localizeText(
-        "Multi-Hit disabled",
-        "Multi-Hit desactive"
-      )
+      tooltip: localize("Ui.HeaderButton.TooltipDisabled", "Multi-Hit disabled")
     };
   }
 
   if (hitActivityExists && hasValidCounts) {
     return {
       status: "valid",
-      tooltip: localizeText(
-        "Multi-Hit enabled and ready",
-        "Multi-Hit actif et configuration valide"
-      )
+      tooltip: localize("Ui.HeaderButton.TooltipValid", "Multi-Hit enabled and ready")
     };
   }
 
   return {
     status: "invalid",
-    tooltip: localizeText(
-      "Multi-Hit enabled but configuration is incomplete",
-      "Multi-Hit actif mais configuration incomplete"
-    )
+    tooltip: localize("Ui.HeaderButton.TooltipInvalid", "Multi-Hit enabled, but setup is incomplete")
   };
 }
 
@@ -142,7 +130,7 @@ async function onRenderItemSheet5e(app, html) {
   );
   button.setAttribute(
     "aria-label",
-    localizeText("Open Multi-Hit configuration", "Ouvrir la configuration Multi-Hit")
+    localize("Ui.HeaderButton.AriaLabel", "Open Multi-Hit configuration")
   );
   button.title = state.tooltip;
 

@@ -1,10 +1,7 @@
+import { formatLocalization, localize } from "../i18n.mjs";
 import { getSpellConfig, setSpellConfig } from "../module.mjs";
 
 const DialogV2 = foundry?.applications?.api?.DialogV2 ?? null;
-
-function localizeText(englishText, frenchText) {
-  return game?.i18n?.lang === "fr" ? frenchText : englishText;
-}
 
 function listItemActivities(item) {
   return Array.from(item?.system?.activities ?? []).map((entry) => {
@@ -29,7 +26,7 @@ function buildActivityOptions(item, config) {
   const activities = listItemActivities(item);
   const options = [{
     value: "",
-    label: localizeText("Select an activity", "Selectionner une activite"),
+    label: localize("Ui.SpellConfig.SelectActivity", "Select an activity"),
     selected: !config.hitActivityId
   }];
 
@@ -44,7 +41,11 @@ function buildActivityOptions(item, config) {
   if (config.hitActivityId && !activities.some((activity) => activity.id === config.hitActivityId)) {
     options.push({
       value: config.hitActivityId,
-      label: localizeText(`Unknown activity (${config.hitActivityId})`, `Activite inconnue (${config.hitActivityId})`),
+      label: formatLocalization(
+        "Ui.SpellConfig.UnknownActivity",
+        { activityId: config.hitActivityId },
+        "Unknown activity ({activityId})"
+      ),
       selected: true
     });
   }
@@ -66,37 +67,38 @@ function buildDialogContent(item, config) {
   return `
     <form class="multi-hit-spell-lvl-scaler-config-form">
       <div class="form-group">
-        <label>${escapeHtml(localizeText("Enable Multi-Hit", "Activer Multi-Hit"))}</label>
+        <label>${escapeHtml(localize("Ui.SpellConfig.Enable", "Enable Multi-Hit"))}</label>
         <input type="checkbox" name="enabled"${config.enabled ? ' checked="checked"' : ""}>
       </div>
       <div class="form-group">
-        <label>${escapeHtml(localizeText("Hit Activity", "Activite de hit"))}</label>
+        <label>${escapeHtml(localize("Ui.SpellConfig.HitActivity", "Hit activity"))}</label>
         <select name="hitActivityId">
           ${activityOptionsMarkup}
         </select>
         <p class="hint">
           ${escapeHtml(
             activities.length
-              ? localizeText("Each hit reuses this activity.", "Chaque hit reutilise cette activite.")
-              : localizeText(
-                "No activities are currently available on this spell.",
-                "Aucune activite n'est actuellement disponible sur ce sort."
+              ? localize("Ui.SpellConfig.ActivityHintAvailable", "Each hit reuses this activity.")
+              : localize(
+                "Ui.SpellConfig.ActivityHintMissing",
+                "No activities are currently available on this spell."
               )
           )}
         </p>
       </div>
       <div class="form-group">
-        <label>${escapeHtml(localizeText("Base Total Hits", "Nombre total de hits de base"))}</label>
+        <label>${escapeHtml(localize("Ui.SpellConfig.BaseTotalHits", "Base total hits"))}</label>
         <input type="number" name="baseTotalHits" min="1" step="1" value="${escapeHtml(config.baseTotalHits)}">
       </div>
       <div class="form-group">
-        <label>${escapeHtml(localizeText("Hits Per Slot Level", "Hits par niveau de slot"))}</label>
+        <label>${escapeHtml(localize("Ui.SpellConfig.HitsPerSlotLevel", "Hits per slot level"))}</label>
         <input type="number" name="hitsPerSlotLevel" min="0" step="1" value="${escapeHtml(config.hitsPerSlotLevel)}">
       </div>
       <p class="hint multi-hit-spell-lvl-scaler-derived-base-level">
-        ${escapeHtml(localizeText(
-          `Base level is derived automatically from spell level ${spellLevel}.`,
-          `Le niveau de base est derive automatiquement du niveau du sort ${spellLevel}.`
+        ${escapeHtml(formatLocalization(
+          "Ui.SpellConfig.DerivedBaseLevel",
+          { spellLevel },
+          "Base spell level is derived automatically from spell level {spellLevel}."
         ))}
       </p>
     </form>
@@ -154,22 +156,25 @@ async function openSpellConfigDialog(item) {
   const content = buildDialogContent(item, config);
   const result = await DialogV2.wait({
     window: {
-      title: localizeText(
-        `Multi-Hit: ${item.name ?? "Spell"}`,
-        `Multi-Hit : ${item.name ?? "Sort"}`
+      title: formatLocalization(
+        "Ui.SpellConfig.Title",
+        {
+          itemName: item.name ?? localize("Ui.SpellConfig.FallbackSpellName", "Spell")
+        },
+        "Multi-Hit: {itemName}"
       )
     },
     content,
     buttons: [
       {
         action: "save",
-        label: localizeText("Save", "Enregistrer"),
+        label: localize("Ui.SpellConfig.Save", "Save"),
         default: true,
         callback: (event, button) => buildSavePayload(button?.form ?? null)
       },
       {
         action: "cancel",
-        label: localizeText("Cancel", "Annuler"),
+        label: localize("Ui.SpellConfig.Cancel", "Cancel"),
         callback: () => null
       }
     ],
@@ -196,7 +201,7 @@ async function openSpellConfigDialog(item) {
   });
 
   ui.notifications?.info?.(
-    localizeText("Multi-Hit configuration saved.", "Configuration Multi-Hit enregistree.")
+    localize("Ui.SpellConfig.Saved", "Multi-Hit configuration saved.")
   );
 
   return getSpellConfig(item);

@@ -1,102 +1,102 @@
 # Multi-Hit Spell Level Scaler
 
-Module Foundry VTT V13 pour `dnd5e` qui permet a certains sorts de gagner des hits supplementaires quand le niveau d'emplacement augmente.
+Multi-Hit Spell Level Scaler is a Foundry VTT V13 module for `dnd5e`.
 
-Le module est pense pour des sorts comme Rayon ardent et Projectile magique, avec une configuration simple directement depuis la fiche du sort.
+It lets selected spells scale by gaining additional hits as slot level increases, instead of increasing the damage of a single hit.
 
-## Ce Que Fait Le Module
+## What The Module Does
 
-- Gere un pool total de hits pour le sort.
-- Applique la regle `1 hit = 1 cible = 1 workflow`.
-- Consomme un seul emplacement au premier hit du cast initial.
-- Relance les hits suivants sans reconsommer d'emplacement.
-- Ne change rien aux sorts qui ne sont pas configures.
+- Treats a configured spell cast as a pool of total hits.
+- Applies the rule `1 hit = 1 target = 1 workflow`.
+- Uses normal spell slot consumption only for the first hit of the initial cast.
+- Resolves all later hits without spending another slot.
+- Leaves unconfigured spells completely unchanged.
 
-## Compatibilite
+## Compatibility
 
 - Foundry VTT V13
-- Systeme `dnd5e`
-- Module standalone
+- `dnd5e`
+- Standalone module
 
-Note sur Midi-QOL :
+Midi-QOL note:
 
-- Le module ne depend pas de Midi-QOL.
-- Le chemin principal utilise les activites natives `dnd5e`.
-- Si Midi-QOL est actif dans votre table, faites un test sur vos sorts configures avant usage regulier.
+- The module does not depend on Midi-QOL.
+- It is built around native `dnd5e` activities.
+- If your world uses Midi-QOL, test configured spells in your own setup before regular play.
 
 ## Installation
 
-- Release GitHub : [theorikkdk/multi-hit-spell-lvl-scaler](https://github.com/theorikkdk/multi-hit-spell-lvl-scaler)
-- Manifest URL : [module.json](https://github.com/theorikkdk/multi-hit-spell-lvl-scaler/releases/latest/download/module.json)
+- GitHub release: [theorikkdk/multi-hit-spell-lvl-scaler](https://github.com/theorikkdk/multi-hit-spell-lvl-scaler)
+- Manifest URL: [module.json](https://github.com/theorikkdk/multi-hit-spell-lvl-scaler/releases/latest/download/module.json)
 
-Dans Foundry :
+In Foundry:
 
-1. Ouvrir l'installation des modules.
-2. Coller l'URL du manifest.
-3. Installer le module.
-4. Activer le module dans votre monde.
+1. Open the module installer.
+2. Paste the manifest URL.
+3. Install the module.
+4. Enable it in your world.
 
-## Configuration D'Un Sort
+## How To Configure A Spell
 
-1. Ouvrir la fiche du sort.
-2. Cliquer sur le bouton header Multi-Hit.
-3. Activer Multi-Hit.
-4. Choisir l'activite a reutiliser pour chaque hit.
-5. Definir `baseTotalHits`.
-6. Definir `hitsPerSlotLevel`.
-7. Enregistrer.
+1. Open the spell sheet.
+2. Click the Multi-Hit button in the sheet header.
+3. Enable Multi-Hit.
+4. Choose the activity that should be reused for each hit.
+5. Set `baseTotalHits`.
+6. Set `hitsPerSlotLevel`.
+7. Save.
 
-Le niveau de base du sort est derive automatiquement depuis la fiche du sort.
+The spell's base level is derived automatically from the spell itself.
 
-## Utilisation
+## How To Use It
 
-### Cast Initial
+### Initial Cast
 
-- Au lancement du sort, vous pouvez selectionner de `1` a `totalHits` cibles.
-- Chaque cible lance un workflow mono-cible separe.
-- Les hits non utilises restent disponibles apres le cast initial.
+- When you cast the spell, you can select from `1` to `totalHits` targets.
+- Each selected target is resolved as its own single-target workflow.
+- Any unused hits remain available after the initial cast.
 
 ### Next Hit
 
-- Utilise exactement `1` hit restant.
-- Exige exactement `1` cible selectionnee.
+- Spends exactly `1` remaining hit.
+- Requires exactly `1` selected target.
 
 ### Resolve All
 
-- Utilise `1` hit par cible selectionnee.
-- Ne peut pas depasser le nombre de hits restants.
+- Spends `1` hit per selected target.
+- Cannot exceed the number of remaining hits.
 
-## Exemples
+## Examples
 
-### Rayon Ardent
+### Scorching Ray
 
-- Sort de niveau 2
+- Base spell level: 2
 - `baseTotalHits = 3`
 - `hitsPerSlotLevel = 1`
 
-Exemples :
+Examples:
 
-- niveau 2 : 3 hits
-- niveau 3 : 4 hits
-- niveau 4 : 5 hits
+- Cast at level 2: 3 hits
+- Cast at level 3: 4 hits
+- Cast at level 4: 5 hits
 
-### Projectile Magique
+### Magic Missile
 
-- Sort de niveau 1
+- Base spell level: 1
 - `baseTotalHits = 3`
 - `hitsPerSlotLevel = 1`
 
-Exemples :
+Examples:
 
-- niveau 1 : 3 hits
-- niveau 2 : 4 hits
-- niveau 3 : 5 hits
+- Cast at level 1: 3 hits
+- Cast at level 2: 4 hits
+- Cast at level 3: 5 hits
 
-## Limitations Actuelles
+## Current Limitations
 
-- Les activites a gabarit / template ne sont pas supportees dans ce chemin.
-- L'interface de configuration est volontairement legere.
+- Template-based activities are not supported in this flow.
+- The configuration UI is intentionally lightweight.
 
-## Licence
+## License
 
-Ce projet est distribue sous licence custom non commerciale. Voir [LICENSE](LICENSE).
+This project is released under a custom non-commercial license. See [LICENSE](LICENSE).

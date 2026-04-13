@@ -1,3 +1,4 @@
+import { formatLocalization, localize } from "../i18n.mjs";
 import { debug, getSpellConfig, warn } from "../module.mjs";
 import { createCastContext, getCastContext } from "../runtime/cast-context.mjs";
 import { promptExtraHitResolution } from "./extra-hit-prompt.mjs";
@@ -428,7 +429,11 @@ async function resolveConfiguredInitialCast(activity, usageConfig = {}, dialogCo
     const totalHits = Math.max(1, normalizeNonNegativeInteger(hitSummary?.totalHits, 1) ?? 1);
 
     if (initialTargetCount < 1) {
-      notifyWarn(`Select between 1 and ${totalHits} target(s) before casting this configured spell.`);
+      notifyWarn(formatLocalization(
+        "Notifications.ConfigTargetRange",
+        { totalHits },
+        "Select between 1 and {totalHits} target(s) before casting this configured spell."
+      ));
 
       debug("Blocked configured spell cast because no target was selected.", {
         hook: PRE_CAST_GUARD_HOOK,
@@ -443,7 +448,14 @@ async function resolveConfiguredInitialCast(activity, usageConfig = {}, dialogCo
     }
 
     if (initialTargetCount > totalHits) {
-      notifyWarn(`You selected ${initialTargetCount} targets but this cast only provides ${totalHits} hit(s). Reduce your selection and try again.`);
+      notifyWarn(formatLocalization(
+        "Notifications.ConfigTooManyTargets",
+        {
+          selectedCount: initialTargetCount,
+          totalHits
+        },
+        "You selected {selectedCount} target(s), but this cast only provides {totalHits} hit(s). Reduce your selection and try again."
+      ));
 
       debug("Blocked configured spell cast because selected targets exceed the total hits available.", {
         hook: PRE_CAST_GUARD_HOOK,
@@ -462,7 +474,7 @@ async function resolveConfiguredInitialCast(activity, usageConfig = {}, dialogCo
     const firstSelectionResult = await applyUserTargetSnapshots([firstTargetSnapshot]);
 
     if (!firstSelectionResult.ok) {
-      notifyWarn("The initial target could not be prepared for a single controlled cast.");
+      notifyWarn(localize("Notifications.InitialTargetPrepareFailed", "The initial target could not be prepared for a controlled single-target cast."));
 
       debug("Blocked controlled initial cast because the first target could not be selected cleanly.", {
         hook: PRE_CAST_GUARD_HOOK,
